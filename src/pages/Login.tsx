@@ -171,7 +171,15 @@ export function Login() {
 
       <div className="fixed bottom-4 inset-x-4 flex items-center justify-between gap-4 text-[11px] text-muted/80 leading-snug pointer-events-none">
         <div className="pointer-events-auto">
-          Designed and developed by Konstantin Skavitin
+          Designed and developed by{' '}
+          <a
+            href="https://www.linkedin.com/in/konstantin-skavitin/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-ink hover:underline"
+          >
+            Konstantin Skavitin
+          </a>
         </div>
         <div className="pointer-events-auto flex items-center gap-3">
           <Link to="/guide" className="hover:text-ink hover:underline">
