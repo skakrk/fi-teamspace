@@ -1,0 +1,520 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Play, Square, RotateCw } from 'lucide-react';
+import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { Input, Label, Textarea } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useTeam';
+import {
+  supabase,
+  type DbPitch,
+  type DbPitchFeedback,
+  type PitchStatus,
+} from '@/lib/supabase';
+import { avg, formatScore } from '@/lib/utils';
+
+function ScoreInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: number | null;
+  onChange: (n: number) => void;
+  label: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs text-muted mb-1">{label}</div>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            className={
+              'w-8 h-8 rounded-md border text-sm font-medium transition-colors ' +
+              (value === n
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-muted border-border hover:border-primary')
+            }
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PitchTimer({
+  target,
+  onSave,
+  initial,
+}: {
+  target: number;
+  initial?: number;
+  onSave: (sec: number) => void;
+}) {
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(initial ?? 0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      if (startRef.current != null) {
+        setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [running]);
+
+  function start() {
+    startRef.current = Date.now() - elapsed * 1000;
+    setRunning(true);
+  }
+  function stop() {
+    setRunning(false);
+    onSave(elapsed);
+  }
+  function reset() {
+    setRunning(false);
+    setElapsed(0);
+    startRef.current = null;
+  }
+
+  const remaining = target - elapsed;
+  const over = remaining < 0;
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="font-mono text-2xl tabular-nums">
+        <span className={over ? 'text-bad' : 'text-ink'}>
+          {Math.abs(remaining).toString().padStart(2, '0')}s
+        </span>
+        <span className="text-xs text-muted ml-1">{over ? 'over' : 'left'}</span>
+      </div>
+      {!running ? (
+        <Button size="sm" onClick={start} title="Start">
+          <Play size={14} /> Start
+        </Button>
+      ) : (
+        <Button size="sm" variant="danger" onClick={stop} title="Stop">
+          <Square size={14} /> Stop
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={reset}>
+        <RotateCw size={14} /> Reset
+      </Button>
+    </div>
+  );
+}
+
+export function PitchDetail() {
+  const { userId } = useParams<{ userId: string }>();
+  const { user } = useAuth();
+  const { profile } = useProfile(userId);
+  const isOwner = user?.id === userId;
+
+  const [pitches, setPitches] = useState<DbPitch[]>([]);
+  const [feedbacks, setFeedbacks] = useState<DbPitchFeedback[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const active = pitches.find((p) => p.id === activeId) || null;
+
+  // edit form for owner on active pitch
+  const [draft, setDraft] = useState<Partial<DbPitch>>({});
+
+  // feedback form for reviewers
+  const [fb, setFb] = useState<Partial<DbPitchFeedback>>({});
+
+  async function reload() {
+    if (!userId) return;
+    const { data: ps } = await supabase
+      .from('pitches')
+      .select('*')
+      .eq('user_id', userId)
+      .order('version', { ascending: false });
+    const list = (ps as DbPitch[]) || [];
+    setPitches(list);
+    if (!activeId && list.length) setActiveId(list[0].id);
+    if (list.length) {
+      const ids = list.map((p) => p.id);
+      const { data: fbs } = await supabase.from('pitch_feedback').select('*').in('pitch_id', ids);
+      setFeedbacks((fbs as DbPitchFeedback[]) || []);
+    } else {
+      setFeedbacks([]);
+    }
+  }
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  useEffect(() => {
+    if (active) {
+      setDraft({
+        text_md: active.text_md,
+        target_duration_sec: active.target_duration_sec,
+        video_url: active.video_url,
+        deck_url: active.deck_url,
+        status: active.status,
+      });
+      const mine = feedbacks.find((f) => f.pitch_id === active.id && f.reviewer_id === user?.id);
+      setFb(
+        mine ?? {
+          pitch_id: active.id,
+          what_works: '',
+          what_unclear: '',
+          suggestion: '',
+          score_clarity: null,
+          score_persuasive: null,
+        },
+      );
+    }
+  }, [activeId, active, feedbacks, user?.id]);
+
+  const fbForActive = useMemo(
+    () => (active ? feedbacks.filter((f) => f.pitch_id === active.id) : []),
+    [feedbacks, active],
+  );
+  const clarityAvg = avg(fbForActive.map((f) => f.score_clarity));
+  const persuasiveAvg = avg(fbForActive.map((f) => f.score_persuasive));
+
+  async function createNewVersion() {
+    if (!user || !userId) return;
+    const nextVersion = (pitches[0]?.version ?? 0) + 1;
+    const seed = pitches[0];
+    const { data, error } = await supabase
+      .from('pitches')
+      .insert({
+        user_id: userId,
+        version: nextVersion,
+        text_md: seed?.text_md ?? '',
+        target_duration_sec: seed?.target_duration_sec ?? 60,
+        video_url: seed?.video_url ?? null,
+        deck_url: seed?.deck_url ?? null,
+        status: 'draft' as PitchStatus,
+      })
+      .select()
+      .maybeSingle();
+    if (!error && data) {
+      await reload();
+      setActiveId((data as DbPitch).id);
+    }
+  }
+
+  async function savePitch() {
+    if (!active) return;
+    await supabase
+      .from('pitches')
+      .update({
+        text_md: draft.text_md ?? '',
+        target_duration_sec: draft.target_duration_sec ?? 60,
+        video_url: draft.video_url || null,
+        deck_url: draft.deck_url || null,
+        status: (draft.status as PitchStatus) || 'draft',
+      })
+      .eq('id', active.id);
+    await reload();
+  }
+
+  async function saveFeedback() {
+    if (!active || !user) return;
+    await supabase.from('pitch_feedback').upsert(
+      {
+        pitch_id: active.id,
+        reviewer_id: user.id,
+        what_works: fb.what_works ?? null,
+        what_unclear: fb.what_unclear ?? null,
+        suggestion: fb.suggestion ?? null,
+        score_clarity: fb.score_clarity ?? null,
+        score_persuasive: fb.score_persuasive ?? null,
+      },
+      { onConflict: 'pitch_id,reviewer_id' },
+    );
+    await reload();
+  }
+
+  if (!profile) return <div className="text-muted text-sm">Loading…</div>;
+
+  return (
+    <div className="space-y-6">
+      <Link to="/pitches" className="text-sm text-muted hover:text-ink">
+        ← Back to pitches
+      </Link>
+
+      <div className="flex items-center gap-4">
+        <Avatar name={profile.full_name} src={profile.avatar_url} size="lg" />
+        <div>
+          <h1 className="h1">{profile.full_name}</h1>
+          <p className="muted text-sm">{profile.project_name}</p>
+        </div>
+      </div>
+
+      {/* Versions sidebar + active version */}
+      <div className="grid lg:grid-cols-[200px_1fr] gap-6">
+        <div>
+          <div className="text-xs uppercase font-medium text-muted mb-2">Versions</div>
+          <div className="space-y-1">
+            {pitches.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setActiveId(p.id)}
+                className={
+                  'w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ' +
+                  (activeId === p.id
+                    ? 'bg-bubble border-primary text-primary-deep'
+                    : 'bg-white border-border hover:border-primary/40')
+                }
+              >
+                <div className="font-medium">v{p.version}</div>
+                <div className="text-xs text-muted capitalize">{p.status.replace('_', ' ')}</div>
+              </button>
+            ))}
+            {!pitches.length && <div className="text-sm text-muted">No versions yet.</div>}
+          </div>
+          {isOwner && (
+            <Button size="sm" className="w-full mt-3" onClick={createNewVersion}>
+              + New version
+            </Button>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          {!active && (
+            <Card>
+              <CardBody className="text-sm text-muted">
+                {isOwner
+                  ? 'Click "New version" to draft your first pitch.'
+                  : 'No pitch versions yet.'}
+              </CardBody>
+            </Card>
+          )}
+
+          {active && (
+            <>
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Pitch v{active.version}</CardTitle>
+                    {active.status === 'ready' && <Badge tone="ok">Ready for review</Badge>}
+                    {active.status === 'reviewed' && <Badge tone="primary">Reviewed</Badge>}
+                    {active.status === 'draft' && <Badge tone="neutral">Draft</Badge>}
+                  </div>
+                  <div className="text-xs text-muted">
+                    {fbForActive.length} feedback{fbForActive.length === 1 ? '' : 's'}
+                    {clarityAvg != null && (
+                      <> · Clarity {formatScore(clarityAvg)} · Persuasive {formatScore(persuasiveAvg)}</>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  {isOwner ? (
+                    <>
+                      <div>
+                        <Label>Pitch (markdown)</Label>
+                        <Textarea
+                          rows={8}
+                          value={draft.text_md ?? ''}
+                          onChange={(e) => setDraft((d) => ({ ...d, text_md: e.target.value }))}
+                          placeholder="Hi, I'm building [project]. We solve [problem] for [target]…"
+                        />
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        <div>
+                          <Label>Target duration (sec)</Label>
+                          <Input
+                            type="number"
+                            value={draft.target_duration_sec ?? 60}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, target_duration_sec: Number(e.target.value) }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>Video URL (Loom)</Label>
+                          <Input
+                            value={draft.video_url ?? ''}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, video_url: e.target.value }))
+                            }
+                            placeholder="https://www.loom.com/share/…"
+                          />
+                        </div>
+                        <div>
+                          <Label>Deck URL</Label>
+                          <Input
+                            value={draft.deck_url ?? ''}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, deck_url: e.target.value }))
+                            }
+                            placeholder="https://docs.google.com/presentation/…"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Status</Label>
+                        <select
+                          value={(draft.status as string) ?? 'draft'}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, status: e.target.value as PitchStatus }))
+                          }
+                          className="h-10 rounded-lg border border-border bg-white px-3 text-sm"
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="ready">Ready for review</option>
+                          <option value="reviewed">Reviewed</option>
+                        </select>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={savePitch}>Save</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="prose prose-sm max-w-none whitespace-pre-line">
+                        {active.text_md || <span className="text-muted">— empty —</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-sm">
+                        {active.video_url && (
+                          <a
+                            className="text-primary-dark hover:underline"
+                            href={active.video_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            ▶ Watch video
+                          </a>
+                        )}
+                        {active.deck_url && (
+                          <a
+                            className="text-primary-dark hover:underline"
+                            href={active.deck_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            📑 Open deck
+                          </a>
+                        )}
+                        <span className="text-muted">Target: {active.target_duration_sec}s</span>
+                      </div>
+                    </>
+                  )}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Pitch timer (practice)</CardTitle></CardHeader>
+                <CardBody>
+                  <PitchTimer
+                    target={active.target_duration_sec}
+                    onSave={() => {
+                      /* practice only; meeting timer in MeetingDetail */
+                    }}
+                  />
+                  <p className="text-xs text-muted mt-2">
+                    Use during practice. Recorded timings (per meeting) live on the meeting page.
+                  </p>
+                </CardBody>
+              </Card>
+
+              {!isOwner && (
+                <Card>
+                  <CardHeader><CardTitle>Your feedback</CardTitle></CardHeader>
+                  <CardBody className="space-y-4">
+                    <div>
+                      <Label>👍 What works</Label>
+                      <Textarea
+                        rows={2}
+                        value={fb.what_works ?? ''}
+                        onChange={(e) => setFb((s) => ({ ...s, what_works: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label>🤔 What's unclear</Label>
+                      <Textarea
+                        rows={2}
+                        value={fb.what_unclear ?? ''}
+                        onChange={(e) => setFb((s) => ({ ...s, what_unclear: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label>💡 Suggestion</Label>
+                      <Textarea
+                        rows={2}
+                        value={fb.suggestion ?? ''}
+                        onChange={(e) => setFb((s) => ({ ...s, suggestion: e.target.value }))}
+                      />
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <ScoreInput
+                        label="Clarity (1–5)"
+                        value={fb.score_clarity ?? null}
+                        onChange={(n) => setFb((s) => ({ ...s, score_clarity: n }))}
+                      />
+                      <ScoreInput
+                        label="Persuasiveness (1–5)"
+                        value={fb.score_persuasive ?? null}
+                        onChange={(n) => setFb((s) => ({ ...s, score_persuasive: n }))}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={saveFeedback}>Save feedback</Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Team feedback ({fbForActive.length})</CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  {!fbForActive.length && (
+                    <div className="text-sm text-muted">No feedback yet.</div>
+                  )}
+                  {fbForActive.map((f) => (
+                    <FeedbackRow key={f.id} fb={f} />
+                  ))}
+                </CardBody>
+              </Card>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackRow({ fb }: { fb: DbPitchFeedback }) {
+  const { profile } = useProfile(fb.reviewer_id);
+  return (
+    <div className="border-b border-border pb-4 last:border-0 last:pb-0">
+      <div className="flex items-center gap-2 mb-2">
+        <Avatar name={profile?.full_name || '?'} src={profile?.avatar_url} size="sm" />
+        <div className="text-sm font-medium">{profile?.full_name || 'Reviewer'}</div>
+        <div className="text-xs text-muted ml-auto">
+          C {formatScore(fb.score_clarity, 0)} · P {formatScore(fb.score_persuasive, 0)}
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3 text-sm">
+        <div className="bg-bubble/40 rounded-lg p-3">
+          <div className="text-xs text-muted mb-1">👍 Works</div>
+          <div>{fb.what_works || <span className="text-muted">—</span>}</div>
+        </div>
+        <div className="bg-amber-50 rounded-lg p-3">
+          <div className="text-xs text-muted mb-1">🤔 Unclear</div>
+          <div>{fb.what_unclear || <span className="text-muted">—</span>}</div>
+        </div>
+        <div className="bg-bg rounded-lg p-3">
+          <div className="text-xs text-muted mb-1">💡 Suggestion</div>
+          <div>{fb.suggestion || <span className="text-muted">—</span>}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
