@@ -1,4 +1,4 @@
-# FI Teamspace — Team Breakers
+# FI Teamspace — Breakers Team
 
 Mini CRM for a Founder Institute Working Group. Profiles, weekly meetings, sprint board, structured pitch feedback, polls (incl. President election), and a dashboard for course presentations.
 
@@ -44,7 +44,7 @@ Open `http://localhost:5173/fi-teamspace/`. Sign up with email + password → yo
 
 - **Profiles** — about me, project, skills, what I can help with, what I need help with, contacts, social. (`/profile`, `/team`)
 - **Pitches ⭐** — weekly Feedback Pitch with versioning, structured 4-field feedback (Works / Unclear / Suggestion / Score), Clarity & Persuasiveness scores, pitch timer. (`/pitches`)
-- **Meetings** — schedule with Google Meet URL, agenda template baked in, "Add to Calendar" (.ics) download, attendance, per-founder Success / Challenge / Learning, meeting minutes, pitch timings. (`/meetings`)
+- **Meetings** — schedule with Google Meet URL, agenda template baked in, "Add to Calendar" (.ics) download, attendance, per-founder Success / Challenge / Learning, meeting minutes, pitch timings, recording & transcript links + AI summary (paste from tl;dv / Tactiq / Otter — see Meeting Detail). (`/meetings`)
 - **Sprints** — founders × tasks board. Click your cell to cycle status (Not started → In progress → Done → Blocked). (`/sprints`)
 - **Polls** — create polls, vote, see results after voting/deadline. President Election preset auto-populates the team as options and lets you flip the `is_president` flag in one click. (`/polls`)
 - **Leaderboard** — record FI standings each week; chart shows our score over time. (`/leaderboard`)

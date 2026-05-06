@@ -10,6 +10,8 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ error?: string }>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -51,6 +53,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         await supabase.auth.signOut();
+      },
+      async sendPasswordReset(email) {
+        // Redirect URL — where the email link should send the user.
+        // Must be added to Supabase → Auth → URL Configuration → Redirect URLs.
+        const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}#/auth/reset`;
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+        return error ? { error: error.message } : {};
+      },
+      async updatePassword(newPassword) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return error ? { error: error.message } : {};
       },
     };
   }, [session, loading]);

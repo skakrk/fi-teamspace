@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useTeam } from '@/hooks/useTeam';
 import { supabase, type DbPitch, type DbPitchFeedback, type PitchStatus } from '@/lib/supabase';
 import { avg, formatScore } from '@/lib/utils';
-import { MegaphoneIcon } from '@/components/icons/StartupIcons';
+import { Megaphone } from 'lucide-react';
 
 type LatestByUser = Record<
   string,
@@ -65,7 +65,7 @@ export function Pitches() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="h1 flex items-center gap-2">
-            <MegaphoneIcon className="text-primary-dark" /> Pitches
+            <Megaphone className="text-primary-dark" size={22} /> Pitches
           </h1>
           <p className="muted text-sm mt-1">
             Each founder iterates a Feedback Pitch weekly. Team gives structured feedback. Open one to review or update.

@@ -1,13 +1,11 @@
-import { RocketIcon } from '@/components/icons/StartupIcons';
+import { Logo } from '@/components/shared/Logo';
 
 export function ConfigBanner() {
   return (
     <div className="min-h-screen grid place-items-center bg-bg p-6">
       <div className="max-w-xl w-full bg-surface border border-border rounded-xl shadow-card p-8">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-primary text-white grid place-items-center">
-            <RocketIcon width={22} height={22} />
-          </div>
+          <Logo size="lg" />
           <h1 className="text-xl font-semibold">FI Teamspace — Setup needed</h1>
         </div>
         <p className="text-sm text-muted mb-4">

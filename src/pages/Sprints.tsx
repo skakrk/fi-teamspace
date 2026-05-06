@@ -11,11 +11,13 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   supabase,
   type DbSprint,
+  type DbSprintCompletion,
   type DbSprintTask,
   type DbTaskProgress,
   type TaskStatus,
 } from '@/lib/supabase';
-import { TargetIcon } from '@/components/icons/StartupIcons';
+import { Target } from 'lucide-react';
+import { notifyError } from '@/lib/notify';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   not_started: 'Not started',
@@ -37,6 +39,7 @@ export function Sprints() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<DbSprintTask[]>([]);
   const [progress, setProgress] = useState<DbTaskProgress[]>([]);
+  const [completions, setCompletions] = useState<DbSprintCompletion[]>([]);
   const [taskOpen, setTaskOpen] = useState(false);
   const [sprintOpen, setSprintOpen] = useState(false);
   const [taskDraft, setTaskDraft] = useState({ title: '', description: '' });
@@ -60,6 +63,7 @@ export function Sprints() {
     if (!activeId) {
       setTasks([]);
       setProgress([]);
+      setCompletions([]);
       return;
     }
     const { data: t } = await supabase
@@ -75,6 +79,31 @@ export function Sprints() {
     } else {
       setProgress([]);
     }
+    const { data: c } = await supabase
+      .from('sprint_completions')
+      .select('*')
+      .eq('sprint_id', activeId);
+    setCompletions((c as DbSprintCompletion[]) || []);
+  }
+
+  async function toggleSprintComplete() {
+    if (!user || !activeId) return;
+    const mine = completions.find((c) => c.user_id === user.id);
+    if (mine) {
+      const { error } = await supabase
+        .from('sprint_completions')
+        .delete()
+        .eq('sprint_id', activeId)
+        .eq('user_id', user.id);
+      if (error) return notifyError('Could not unmark completion', error);
+    } else {
+      const { error } = await supabase.from('sprint_completions').insert({
+        sprint_id: activeId,
+        user_id: user.id,
+      });
+      if (error) return notifyError('Could not mark completion', error);
+    }
+    await loadTasks();
   }
 
   useEffect(() => {
@@ -112,12 +141,16 @@ export function Sprints() {
 
   async function addTask() {
     if (!activeId || !taskDraft.title) return;
-    await supabase.from('sprint_tasks').insert({
+    const { error } = await supabase.from('sprint_tasks').insert({
       sprint_id: activeId,
       title: taskDraft.title,
       description: taskDraft.description || null,
       sort_order: tasks.length + 1,
     });
+    if (error) {
+      notifyError('Could not add task', error);
+      return;
+    }
     setTaskOpen(false);
     setTaskDraft({ title: '', description: '' });
     await loadTasks();
@@ -126,12 +159,23 @@ export function Sprints() {
   async function addSprint() {
     if (!sprintDraft.name) return;
     // unset previous current
-    await supabase.from('sprints').update({ is_current: false }).neq('id', '00000000-0000-0000-0000-000000000000');
-    const { data } = await supabase
+    const { error: upErr } = await supabase
+      .from('sprints')
+      .update({ is_current: false })
+      .gt('week_number', 0);
+    if (upErr) {
+      notifyError('Could not update sprints', upErr);
+      return;
+    }
+    const { data, error } = await supabase
       .from('sprints')
       .insert({ ...sprintDraft, is_current: true })
       .select()
       .maybeSingle();
+    if (error) {
+      notifyError('Could not create sprint', error);
+      return;
+    }
     setSprintOpen(false);
     await loadSprints();
     if (data) setActiveId((data as DbSprint).id);
@@ -142,7 +186,7 @@ export function Sprints() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="h1 flex items-center gap-2">
-            <TargetIcon className="text-primary-dark" /> Sprints
+            <Target className="text-primary-dark" size={22} /> Sprints
           </h1>
           <p className="muted text-sm mt-1">
             Each week the whole team works on the same checklist. Click your cell to cycle status.
@@ -179,22 +223,61 @@ export function Sprints() {
 
       {active && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <CardTitle>{active.name}</CardTitle>
               <div className="text-xs text-muted mt-1">
                 Week {active.week_number} · {format(new Date(active.start_date), 'MMM d')} –{' '}
                 {format(new Date(active.end_date), 'MMM d')}
               </div>
+              {active.description && (
+                <div className="text-sm mt-2 text-muted">{active.description}</div>
+              )}
             </div>
+            <Button
+              size="sm"
+              variant={completions.some((c) => c.user_id === user?.id) ? 'secondary' : 'primary'}
+              onClick={toggleSprintComplete}
+              disabled={!user}
+            >
+              <Check size={14} />
+              {completions.some((c) => c.user_id === user?.id)
+                ? 'Sprint completed (click to unmark)'
+                : 'Mark sprint completed'}
+            </Button>
           </CardHeader>
           <CardBody>
-            <div className="text-sm text-muted mb-4">
-              Team progress:{' '}
+            <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
+              <span className="text-muted">Tasks:</span>
               <span className="font-medium text-ink">
                 {stats.done}/{stats.total}
-              </span>{' '}
-              cells done
+              </span>
+              <span className="text-muted">cells done ·</span>
+              <span className="text-muted">Sprint completed by:</span>
+              <span className="font-medium text-ink">
+                {completions.length}/{profiles.length}
+              </span>
+              {profiles.length > 0 && completions.length > 0 && (
+                <div className="flex gap-1 ml-1">
+                  {profiles
+                    .filter((p) => completions.some((c) => c.user_id === p.user_id))
+                    .map((p) => (
+                      <span
+                        key={p.user_id}
+                        title={p.full_name}
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-bubble text-primary-deep text-[10px] font-semibold"
+                      >
+                        {(p.full_name || '?')
+                          .split(' ')
+                          .map((s) => s[0])
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase()}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
 
             {tasks.length === 0 ? (

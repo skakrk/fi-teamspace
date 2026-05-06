@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,9 +13,12 @@ import {
   type DbPollOption,
   type DbVote,
 } from '@/lib/supabase';
+import { PresidentRoleCard } from '@/components/shared/PresidentRole';
+import { notifyError } from '@/lib/notify';
 
 export function PollDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { profiles } = useTeam();
   const [poll, setPoll] = useState<DbPoll | null>(null);
@@ -82,11 +86,24 @@ export function PollDetail() {
     alert(`${optionLabel} is now the President.`);
   }
 
+  async function deletePoll() {
+    if (!id || !poll) return;
+    if (!confirm(`Delete poll "${poll.title}" permanently? All votes will be lost.`)) return;
+    const { error } = await supabase.from('polls').delete().eq('id', id);
+    if (error) {
+      notifyError('Could not delete poll', error);
+      return;
+    }
+    navigate('/polls');
+  }
+
   if (!poll) return <div className="text-muted text-sm">Loading…</div>;
 
   const winner = options
     .slice()
     .sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0))[0];
+
+  const isPresidentElection = poll.title.toLowerCase().includes('president');
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -94,19 +111,26 @@ export function PollDetail() {
         ← Back to polls
       </Link>
 
+      {isPresidentElection && <PresidentRoleCard />}
+
       <Card>
         <CardHeader>
           <div className="flex items-start gap-2 flex-wrap">
             <CardTitle>{poll.title}</CardTitle>
-            <div className="ml-auto flex gap-2 flex-wrap">
+            <div className="ml-auto flex gap-2 flex-wrap items-center">
               <Badge tone={isClosed ? 'neutral' : 'ok'}>
                 {isClosed ? 'closed' : 'open'}
               </Badge>
               {poll.is_anonymous && <Badge tone="neutral">Anonymous</Badge>}
+              {user?.id === poll.created_by && (
+                <Button size="sm" variant="ghost" onClick={deletePoll} title="Delete poll">
+                  <Trash2 size={14} className="text-bad" />
+                </Button>
+              )}
             </div>
           </div>
           {poll.description && (
-            <p className="text-sm text-muted mt-2">{poll.description}</p>
+            <p className="text-sm text-muted mt-2 whitespace-pre-line">{poll.description}</p>
           )}
           {poll.deadline && (
             <p className="text-xs text-muted mt-1">

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Play, Square, RotateCw } from 'lucide-react';
+import { Play, Square, RotateCw, Trash2 } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Input, Label, Textarea } from '@/components/ui/Input';
+import { FieldHint, Input, Label, Textarea } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useTeam';
@@ -14,7 +14,8 @@ import {
   type DbPitchFeedback,
   type PitchStatus,
 } from '@/lib/supabase';
-import { avg, formatScore } from '@/lib/utils';
+import { avg, extractYouTubeId, formatScore } from '@/lib/utils';
+import { notifyError } from '@/lib/notify';
 
 function ScoreInput({
   value,
@@ -49,15 +50,29 @@ function ScoreInput({
   );
 }
 
+const TIMER_PRESETS = [
+  { label: '60 sec', value: 60 },
+  { label: '3 min',  value: 180 },
+  { label: '5 min',  value: 300 },
+];
+
+function formatTime(secs: number): string {
+  const s = Math.floor(secs % 60);
+  const m = Math.floor(secs / 60);
+  if (m === 0) return `${s.toString().padStart(2, '0')}s`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function PitchTimer({
-  target,
+  initialTarget,
   onSave,
   initial,
 }: {
-  target: number;
+  initialTarget: number;
   initial?: number;
   onSave: (sec: number) => void;
 }) {
+  const [target, setTarget] = useState(initialTarget);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(initial ?? 0);
   const startRef = useRef<number | null>(null);
@@ -85,30 +100,56 @@ function PitchTimer({
     setElapsed(0);
     startRef.current = null;
   }
+  function pickTarget(v: number) {
+    setTarget(v);
+    reset();
+  }
 
   const remaining = target - elapsed;
   const over = remaining < 0;
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="font-mono text-2xl tabular-nums">
-        <span className={over ? 'text-bad' : 'text-ink'}>
-          {Math.abs(remaining).toString().padStart(2, '0')}s
-        </span>
-        <span className="text-xs text-muted ml-1">{over ? 'over' : 'left'}</span>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">Target:</span>
+        {TIMER_PRESETS.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => pickTarget(p.value)}
+            className={
+              'px-2.5 h-7 rounded-md text-xs font-medium border transition-colors ' +
+              (target === p.value
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-muted border-border hover:text-ink')
+            }
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
-      {!running ? (
-        <Button size="sm" onClick={start} title="Start">
-          <Play size={14} /> Start
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="font-mono text-3xl tabular-nums leading-none">
+          <span className={over ? 'text-bad' : 'text-ink'}>
+            {formatTime(Math.abs(remaining))}
+          </span>
+          <span className="text-xs text-muted ml-2">{over ? 'over' : 'left'}</span>
+        </div>
+        {!running ? (
+          <Button size="sm" onClick={start} title="Start">
+            <Play size={14} /> Start
+          </Button>
+        ) : (
+          <Button size="sm" variant="danger" onClick={stop} title="Stop">
+            <Square size={14} /> Stop
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={reset}>
+          <RotateCw size={14} /> Reset
         </Button>
-      ) : (
-        <Button size="sm" variant="danger" onClick={stop} title="Stop">
-          <Square size={14} /> Stop
-        </Button>
-      )}
-      <Button size="sm" variant="ghost" onClick={reset}>
-        <RotateCw size={14} /> Reset
-      </Button>
+        <span className="text-xs text-muted ml-auto">Elapsed: {formatTime(elapsed)}</span>
+      </div>
     </div>
   );
 }
@@ -207,6 +248,23 @@ export function PitchDetail() {
     }
   }
 
+  async function deleteVersion(p: DbPitch) {
+    if (!user || p.user_id !== user.id) return;
+    const fbCount = feedbacks.filter((f) => f.pitch_id === p.id).length;
+    const msg =
+      `Delete pitch v${p.version}?` +
+      (fbCount ? `\n\nThis will also remove ${fbCount} feedback ${fbCount === 1 ? 'entry' : 'entries'}.` : '');
+    if (!confirm(msg)) return;
+    const { error } = await supabase.from('pitches').delete().eq('id', p.id);
+    if (error) return notifyError('Could not delete pitch', error);
+    // If we just deleted the active version, switch to the next one (newest first)
+    if (activeId === p.id) {
+      const remaining = pitches.filter((x) => x.id !== p.id);
+      setActiveId(remaining[0]?.id ?? null);
+    }
+    await reload();
+  }
+
   async function savePitch() {
     if (!active) return;
     await supabase
@@ -261,19 +319,34 @@ export function PitchDetail() {
           <div className="text-xs uppercase font-medium text-muted mb-2">Versions</div>
           <div className="space-y-1">
             {pitches.map((p) => (
-              <button
+              <div
                 key={p.id}
-                onClick={() => setActiveId(p.id)}
                 className={
-                  'w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ' +
+                  'w-full px-3 py-2 rounded-lg border text-sm transition-colors flex items-center gap-2 ' +
                   (activeId === p.id
                     ? 'bg-bubble border-primary text-primary-deep'
                     : 'bg-white border-border hover:border-primary/40')
                 }
               >
-                <div className="font-medium">v{p.version}</div>
-                <div className="text-xs text-muted capitalize">{p.status.replace('_', ' ')}</div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveId(p.id)}
+                  className="flex-1 text-left"
+                >
+                  <div className="font-medium">v{p.version}</div>
+                  <div className="text-xs text-muted capitalize">{p.status.replace('_', ' ')}</div>
+                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => deleteVersion(p)}
+                    title={`Delete v${p.version}`}
+                    className="p-1 rounded hover:bg-red-50 text-muted hover:text-bad transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
             ))}
             {!pitches.length && <div className="text-sm text-muted">No versions yet.</div>}
           </div>
@@ -336,14 +409,17 @@ export function PitchDetail() {
                           />
                         </div>
                         <div>
-                          <Label>Video URL (Loom)</Label>
+                          <Label>Video URL (YouTube unlisted)</Label>
                           <Input
                             value={draft.video_url ?? ''}
                             onChange={(e) =>
                               setDraft((d) => ({ ...d, video_url: e.target.value }))
                             }
-                            placeholder="https://www.loom.com/share/…"
+                            placeholder="https://youtu.be/…"
                           />
+                          <FieldHint>
+                            Upload to YouTube and set <strong>Visibility: Unlisted</strong> — only people with the link can watch.
+                          </FieldHint>
                         </div>
                         <div>
                           <Label>Deck URL</Label>
@@ -379,6 +455,17 @@ export function PitchDetail() {
                       <div className="prose prose-sm max-w-none whitespace-pre-line">
                         {active.text_md || <span className="text-muted">— empty —</span>}
                       </div>
+                      {active.video_url && extractYouTubeId(active.video_url) && (
+                        <div className="aspect-video w-full rounded-lg overflow-hidden border border-border">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${extractYouTubeId(active.video_url)}`}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            title="Pitch video"
+                          />
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-3 text-sm">
                         {active.video_url && (
                           <a
@@ -387,7 +474,7 @@ export function PitchDetail() {
                             target="_blank"
                             rel="noreferrer"
                           >
-                            ▶ Watch video
+                            ▶ Open in YouTube
                           </a>
                         )}
                         {active.deck_url && (
@@ -411,7 +498,7 @@ export function PitchDetail() {
                 <CardHeader><CardTitle>Pitch timer (practice)</CardTitle></CardHeader>
                 <CardBody>
                   <PitchTimer
-                    target={active.target_duration_sec}
+                    initialTarget={active.target_duration_sec}
                     onSave={() => {
                       /* practice only; meeting timer in MeetingDetail */
                     }}

@@ -20,6 +20,11 @@ export type DbProfile = {
   about_me: string | null;
   project_name: string | null;
   project_description: string | null;
+  project_logo_url: string | null;
+  project_website: string | null;
+  project_linkedin: string | null;
+  project_twitter: string | null;
+  project_instagram: string | null;
   skills: string | null;
   can_help_with: string | null;
   need_help_with: string | null;
@@ -63,6 +68,8 @@ export type DbTaskProgress = {
   updated_at: string;
 };
 
+export type MeetingKind = 'working_group' | 'cohort_session';
+
 export type DbMeeting = {
   id: string;
   title: string;
@@ -71,9 +78,14 @@ export type DbMeeting = {
   meet_url: string | null;
   agenda: string | null;
   status: 'upcoming' | 'past' | 'cancelled';
+  kind: MeetingKind;
   sprint_id: string | null;
   created_by: string | null;
   created_at: string;
+  recording_url: string | null;
+  transcript_url: string | null;
+  transcript_text: string | null;
+  summary: string | null;
 };
 
 export type DbMeetingUpdate = {
@@ -82,6 +94,16 @@ export type DbMeetingUpdate = {
   success: string | null;
   challenge: string | null;
   learning: string | null;
+  updated_at: string;
+};
+
+export type DbMeetingNotes = {
+  meeting_id: string;
+  content: string | null;                  // legacy / extra
+  discussion_points: string | null;
+  sprint_questions: string | null;
+  next_meeting_review: string | null;
+  updated_by: string | null;
   updated_at: string;
 };
 
@@ -138,18 +160,85 @@ export type DbVote = {
   created_at: string;
 };
 
-export type DbLeaderboard = {
+export type DbCohortRating = {
   id: string;
   recorded_at: string;
   team_name: string;
-  score: number;
-  rank: number | null;
+  member_name: string;
+  score: number | null;
+  sort_order: number;
+};
+
+export type TeamStanding = {
+  team_name: string;
+  members: DbCohortRating[];
+  avg_score: number | null;
+  rank: number;
 };
 
 export type DbTeamVision = {
   id: number;
   vision: string | null;
   mission: string | null;
+  whatsapp_group_url: string | null;
   updated_by: string | null;
   updated_at: string;
+};
+
+export type DbSprintCompletion = {
+  sprint_id: string;
+  user_id: string;
+  completed_at: string;
+  notes: string | null;
+};
+
+export type DbProjectFeedback = {
+  id: string;
+  founder_id: string;
+  reviewer_id: string;
+  body: string;
+  category: string;
+  created_at: string;
+};
+
+export type DbResource = {
+  id: string;
+  posted_by: string | null;
+  title: string;
+  url: string | null;
+  body: string | null;
+  category: string;
+  event_date: string | null;
+  created_at: string;
+};
+
+export type DbCourseMilestone = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  required: boolean;
+};
+
+export type MemberMilestoneStatus = 'not_started' | 'in_progress' | 'done';
+
+export type DbMemberMilestone = {
+  milestone_id: string;
+  user_id: string;
+  status: MemberMilestoneStatus;
+  notes: string | null;
+  updated_at: string;
+};
+
+export type DbTeamContact = {
+  id: string;
+  team_name: string;
+  member_name: string;
+  phone: string | null;
+  email: string | null;
+  linkedin: string | null;
+  telegram: string | null;
+  notes: string | null;
+  sort_order: number;
 };

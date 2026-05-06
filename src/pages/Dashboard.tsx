@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
+import { safeFormat, safeDistance } from '@/lib/utils';
 import {
   CartesianGrid,
   Line,
@@ -10,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { CalendarDays, ChevronRight, Maximize2, Video } from 'lucide-react';
+import { Download, ChevronRight, Maximize2, Video } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -19,7 +20,7 @@ import { useTeam } from '@/hooks/useTeam';
 import { downloadICS } from '@/lib/ics';
 import {
   supabase,
-  type DbLeaderboard,
+  type DbCohortRating,
   type DbMeeting,
   type DbMeetingUpdate,
   type DbPitch,
@@ -29,13 +30,16 @@ import {
   type DbTaskProgress,
 } from '@/lib/supabase';
 import {
-  GrowthIcon,
-  MegaphoneIcon,
-  StopwatchIcon,
-  TrophyIcon,
-} from '@/components/icons/StartupIcons';
+  computeStandings,
+  latestSnapshotDate,
+  ourTeamHistory,
+  rowsForDate,
+} from '@/lib/standings';
+import { LayoutDashboard, Megaphone, CalendarClock, Trophy, Crown } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
 
-const OUR_TEAM = 'Team Breakers';
+const OUR_TEAM = 'Breakers Team';
 
 type DashboardData = {
   meeting: DbMeeting | null;
@@ -45,8 +49,27 @@ type DashboardData = {
   latestPitchByUser: Record<string, DbPitch>;
   meetingUpdates: DbMeetingUpdate[];
   poll: DbPoll | null;
-  leaderboard: DbLeaderboard[];
+  cohort: DbCohortRating[];
 };
+
+type QueryResult = { data: unknown; error: unknown };
+type Thenable = { then(resolve: (r: QueryResult) => void, reject?: (e: unknown) => void): unknown };
+
+async function safeQuery<T>(label: string, fn: () => Thenable): Promise<T[]> {
+  try {
+    const result = await (fn() as unknown as Promise<QueryResult>);
+    if (result?.error) {
+      // eslint-disable-next-line no-console
+      console.warn(`[dashboard:${label}]`, result.error);
+      return [];
+    }
+    return (result?.data as T[]) || [];
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[dashboard:${label}] threw`, err);
+    return [];
+  }
+}
 
 function useDashboardData() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -55,75 +78,78 @@ function useDashboardData() {
     (async () => {
       const now = new Date();
 
-      const { data: meet } = await supabase
-        .from('meetings')
-        .select('*')
-        .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(1);
-      const meeting = ((meet as DbMeeting[]) || [])[0] ?? null;
+      // Fire all independent queries in parallel; isolate failures so one bad
+      // table can't block the whole dashboard.
+      const [
+        meetings,
+        currentSprintRows,
+        anySprintRows,
+        allPitches,
+        openPolls,
+        cohortRows,
+      ] = await Promise.all([
+        safeQuery<DbMeeting>('meetings', () =>
+          supabase
+            .from('meetings')
+            .select('*')
+            .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
+            .order('scheduled_at', { ascending: true })
+            .limit(1),
+        ),
+        safeQuery<DbSprint>('sprints/current', () =>
+          supabase.from('sprints').select('*').eq('is_current', true).limit(1),
+        ),
+        safeQuery<DbSprint>('sprints/any', () =>
+          supabase
+            .from('sprints')
+            .select('*')
+            .order('week_number', { ascending: false })
+            .limit(1),
+        ),
+        safeQuery<DbPitch>('pitches', () =>
+          supabase.from('pitches').select('*').order('version', { ascending: false }),
+        ),
+        safeQuery<DbPoll>('polls', () =>
+          supabase
+            .from('polls')
+            .select('*')
+            .eq('status', 'open')
+            .order('created_at', { ascending: false })
+            .limit(1),
+        ),
+        safeQuery<DbCohortRating>('cohort_ratings', () =>
+          supabase.from('cohort_ratings').select('*').order('recorded_at', { ascending: false }),
+        ),
+      ]);
 
-      const { data: sprintData } = await supabase
-        .from('sprints')
-        .select('*')
-        .eq('is_current', true)
-        .maybeSingle();
-      let sprint = (sprintData as DbSprint) || null;
-      if (!sprint) {
-        const { data: any } = await supabase
-          .from('sprints')
-          .select('*')
-          .order('week_number', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        sprint = (any as DbSprint) || null;
-      }
+      const meeting = meetings[0] ?? null;
+      const sprint = currentSprintRows[0] ?? anySprintRows[0] ?? null;
 
       let tasks: DbSprintTask[] = [];
       let progress: DbTaskProgress[] = [];
       if (sprint) {
-        const { data: t } = await supabase
-          .from('sprint_tasks')
-          .select('*')
-          .eq('sprint_id', sprint.id);
-        tasks = (t as DbSprintTask[]) || [];
+        tasks = await safeQuery<DbSprintTask>('sprint_tasks', () =>
+          supabase.from('sprint_tasks').select('*').eq('sprint_id', sprint.id),
+        );
         const ids = tasks.map((x) => x.id);
         if (ids.length) {
-          const { data: p } = await supabase.from('task_progress').select('*').in('task_id', ids);
-          progress = (p as DbTaskProgress[]) || [];
+          progress = await safeQuery<DbTaskProgress>('task_progress', () =>
+            supabase.from('task_progress').select('*').in('task_id', ids),
+          );
         }
       }
 
-      const { data: allPitches } = await supabase
-        .from('pitches')
-        .select('*')
-        .order('version', { ascending: false });
       const byUser: Record<string, DbPitch> = {};
-      for (const p of (allPitches as DbPitch[]) || []) {
+      for (const p of allPitches) {
         if (!byUser[p.user_id] || byUser[p.user_id].version < p.version) byUser[p.user_id] = p;
       }
 
       let updates: DbMeetingUpdate[] = [];
       if (meeting) {
-        const { data: u } = await supabase
-          .from('meeting_updates')
-          .select('*')
-          .eq('meeting_id', meeting.id);
-        updates = (u as DbMeetingUpdate[]) || [];
+        updates = await safeQuery<DbMeetingUpdate>('meeting_updates', () =>
+          supabase.from('meeting_updates').select('*').eq('meeting_id', meeting.id),
+        );
       }
-
-      const { data: openPolls } = await supabase
-        .from('polls')
-        .select('*')
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      const poll = ((openPolls as DbPoll[]) || [])[0] ?? null;
-
-      const { data: lb } = await supabase
-        .from('fi_leaderboard')
-        .select('*')
-        .order('recorded_at', { ascending: false });
 
       setData({
         meeting,
@@ -132,8 +158,8 @@ function useDashboardData() {
         progress,
         latestPitchByUser: byUser,
         meetingUpdates: updates,
-        poll,
-        leaderboard: (lb as DbLeaderboard[]) || [],
+        poll: openPolls[0] ?? null,
+        cohort: cohortRows,
       });
     })();
   }, []);
@@ -141,22 +167,22 @@ function useDashboardData() {
   return data;
 }
 
-function LeaderboardBanner({ rows }: { rows: DbLeaderboard[] }) {
-  const dates = Array.from(new Set(rows.map((r) => r.recorded_at))).sort();
-  const ourSeries = dates.map((d) => {
-    const r = rows.find((x) => x.recorded_at === d && x.team_name === OUR_TEAM);
-    return { date: format(new Date(d), 'MMM d'), score: r ? Number(r.score) : null };
-  });
-  const latestDate = dates[dates.length - 1];
-  const ours = rows.find((r) => r.recorded_at === latestDate && r.team_name === OUR_TEAM);
-  const total = rows.filter((r) => r.recorded_at === latestDate).length;
+function LeaderboardBanner({ rows }: { rows: DbCohortRating[] }) {
+  const ourSeries = ourTeamHistory(rows, OUR_TEAM).map((h) => ({
+    date: safeFormat(h.date, 'MMM d', ''),
+    score: h.score,
+  }));
+  const latestDate = latestSnapshotDate(rows);
+  const standings = latestDate ? computeStandings(rowsForDate(rows, latestDate)) : [];
+  const ours = standings.find((s) => s.team_name === OUR_TEAM) ?? null;
+  const total = standings.length;
 
   return (
     <Card>
       <CardBody className="flex flex-col md:flex-row items-stretch gap-4">
         <div className="flex-1 flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-bubble text-primary-deep grid place-items-center">
-            <TrophyIcon width={22} height={22} />
+            <Trophy size={22} />
           </div>
           <div>
             <div className="text-xs text-muted">FI Standing</div>
@@ -165,7 +191,11 @@ function LeaderboardBanner({ rows }: { rows: DbLeaderboard[] }) {
             </div>
             {ours && (
               <div className="text-sm text-muted">
-                Score <span className="font-mono">{Number(ours.score).toFixed(1)}</span> · goal: top 2
+                Score{' '}
+                <span className="font-mono">
+                  {ours.avg_score == null ? '—' : ours.avg_score.toFixed(1)}
+                </span>{' '}
+                · goal: top 2
               </div>
             )}
           </div>
@@ -202,11 +232,13 @@ function LeaderboardBanner({ rows }: { rows: DbLeaderboard[] }) {
 export function Dashboard() {
   const data = useDashboardData();
   const { profiles } = useTeam();
+  const { user } = useAuth();
 
-  if (!data) return <div className="text-muted text-sm">Loading…</div>;
+  const tasks = data?.tasks ?? [];
+  const progress = data?.progress ?? [];
 
-  const { meeting, sprint, tasks, progress, latestPitchByUser, meetingUpdates, poll, leaderboard } =
-    data;
+  const myProfile = profiles.find((p) => p.user_id === user?.id);
+  const iAmPresident = !!myProfile?.is_president;
 
   const sprintStats = useMemo(() => {
     if (!tasks.length || !profiles.length) return { done: 0, total: 0, pct: 0 };
@@ -215,29 +247,91 @@ export function Dashboard() {
     return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
   }, [tasks, progress, profiles]);
 
+  if (!data) return <div className="text-muted text-sm">Loading…</div>;
+
+  const { meeting, sprint, latestPitchByUser, meetingUpdates, poll, cohort } = data;
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="h1 flex items-center gap-2">
-            <GrowthIcon className="text-primary-dark" /> Dashboard
+            <LayoutDashboard className="text-primary-dark" size={22} /> Dashboard
           </h1>
-          <p className="muted text-sm mt-1">Team Breakers · FI Core Program (CEE, Spring 2026)</p>
+          <p className="muted text-sm mt-1">Breakers Team · FI Core Program (CEE, Spring 2026)</p>
         </div>
-        <Link to="/dashboard/present">
-          <Button variant="outline">
-            <Maximize2 size={16} /> Present mode
-          </Button>
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link to="/dashboard/present">
+            <Button variant="outline">
+              <Maximize2 size={16} /> Working Group mode
+            </Button>
+          </Link>
+          <Link to="/dashboard/cohort">
+            <Button>
+              <Maximize2 size={16} /> Cohort session mode
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <LeaderboardBanner rows={leaderboard} />
+      <LeaderboardBanner rows={cohort} />
+
+      {myProfile && (() => {
+        const missing: string[] = [];
+        if (!myProfile.project_name) missing.push('project name');
+        if (!myProfile.project_description) missing.push('project description');
+        if (!myProfile.linkedin) missing.push('LinkedIn');
+        if (!myProfile.phone) missing.push('phone');
+        if (!myProfile.about_me) missing.push('about me');
+        if (missing.length === 0) return null;
+        return (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardBody className="flex items-start gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-ink">Complete your profile</div>
+                <div className="text-sm text-muted mt-1">
+                  Teammates can see better who you are and how to reach you when these are filled in:{' '}
+                  <span className="text-ink">{missing.join(', ')}</span>.
+                </div>
+              </div>
+              <Link to="/profile">
+                <Button>Fill in profile →</Button>
+              </Link>
+            </CardBody>
+          </Card>
+        );
+      })()}
+
+      {iAmPresident && (
+        <Card className="border-primary/40 bg-bubble/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Crown size={18} className="text-primary-deep" /> President checklist — your accountability
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-xs text-muted mb-3">
+              You're the President of this Working Group. Per FI guide, your responsibilities for every session:
+            </p>
+            <ul className="space-y-2 text-sm">
+              {PRESIDENT_RESPONSIBILITIES.map((r, i) => (
+                <li key={r.code} className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary text-white grid place-items-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <span>{r.label}</span>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MegaphoneIcon className="text-primary-dark" /> Pitch readiness for next session
+              <Megaphone className="text-primary-dark" size={20} /> Pitch readiness for next session
             </CardTitle>
           </CardHeader>
           <CardBody>
@@ -280,7 +374,7 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <StopwatchIcon className="text-primary-dark" /> Next meeting
+              <CalendarClock className="text-primary-dark" size={20} /> Next meeting
             </CardTitle>
           </CardHeader>
           <CardBody>
@@ -290,10 +384,10 @@ export function Dashboard() {
               <div className="space-y-2">
                 <div className="font-semibold">{meeting.title}</div>
                 <div className="text-sm text-muted">
-                  {format(new Date(meeting.scheduled_at), 'EEE, MMM d · HH:mm')}
+                  {safeFormat(meeting.scheduled_at, 'EEE, MMM d · HH:mm')}
                 </div>
                 <div className="text-xs text-muted">
-                  in {formatDistanceToNow(new Date(meeting.scheduled_at))}
+                  in {safeDistance(meeting.scheduled_at)}
                 </div>
                 <div className="flex gap-2 pt-2 flex-wrap">
                   {meeting.meet_url && (
@@ -304,7 +398,7 @@ export function Dashboard() {
                     </a>
                   )}
                   <Button size="sm" variant="outline" onClick={() => downloadICS(meeting)}>
-                    <CalendarDays size={14} /> Calendar
+                    <Download size={14} /> Calendar
                   </Button>
                   <Link to={`/meetings/${meeting.id}`}>
                     <Button size="sm" variant="ghost">
@@ -330,8 +424,8 @@ export function Dashboard() {
               <div className="space-y-3">
                 <div className="font-semibold">{sprint.name}</div>
                 <div className="text-xs text-muted">
-                  {format(new Date(sprint.start_date), 'MMM d')} –{' '}
-                  {format(new Date(sprint.end_date), 'MMM d')}
+                  {safeFormat(sprint.start_date, 'MMM d')} –{' '}
+                  {safeFormat(sprint.end_date, 'MMM d')}
                 </div>
                 <div className="h-2 bg-bg rounded-full overflow-hidden">
                   <div
@@ -437,19 +531,83 @@ export function Dashboard() {
 // Present Mode — fullscreen view for screen sharing on FI calls
 // =============================================================
 
+// FI Working Group standard agenda (per fi.co working_group)
+const AGENDA = [
+  { time: '~5 min',     label: 'Welcome' },
+  { time: '~10 min',    label: 'Review previous challenges' },
+  { time: '~30–60 min', label: 'Round-robin: 1 success + 1 challenge per founder' },
+  { time: '~30 min',    label: 'Sprint deliverables review' },
+  { time: '~15–30 min', label: 'Open networking' },
+  { time: 'Closing',    label: 'President posts Meeting Minutes' },
+];
+
 export function DashboardPresent() {
   const data = useDashboardData();
   const { profiles } = useTeam();
 
+  // Local sprint selector — defaults to current
+  const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [selectedTasks, setSelectedTasks] = useState<DbSprintTask[]>([]);
+  const [selectedProgress, setSelectedProgress] = useState<DbTaskProgress[]>([]);
+  const [selectedCompletions, setSelectedCompletions] = useState<{ user_id: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data: sps } = await supabase
+        .from('sprints')
+        .select('*')
+        .order('week_number', { ascending: true });
+      const list = (sps as DbSprint[]) || [];
+      setAllSprints(list);
+      if (!selectedSprintId) {
+        const cur = list.find((s) => s.is_current) ?? list[list.length - 1] ?? null;
+        if (cur) setSelectedSprintId(cur.id);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!selectedSprintId) {
+        setSelectedTasks([]);
+        setSelectedProgress([]);
+        setSelectedCompletions([]);
+        return;
+      }
+      const { data: t } = await supabase
+        .from('sprint_tasks')
+        .select('*')
+        .eq('sprint_id', selectedSprintId);
+      const taskList = (t as DbSprintTask[]) || [];
+      setSelectedTasks(taskList);
+      if (taskList.length) {
+        const { data: p } = await supabase
+          .from('task_progress')
+          .select('*')
+          .in('task_id', taskList.map((x) => x.id));
+        setSelectedProgress((p as DbTaskProgress[]) || []);
+      } else {
+        setSelectedProgress([]);
+      }
+      const { data: c } = await supabase
+        .from('sprint_completions')
+        .select('user_id')
+        .eq('sprint_id', selectedSprintId);
+      setSelectedCompletions((c as { user_id: string }[]) || []);
+    })();
+  }, [selectedSprintId]);
+
   if (!data) return <div className="min-h-screen grid place-items-center">Loading…</div>;
 
-  const { sprint, tasks, progress, latestPitchByUser, meetingUpdates, leaderboard } = data;
+  const { latestPitchByUser, meetingUpdates, cohort } = data;
+  const sprint = allSprints.find((s) => s.id === selectedSprintId) ?? null;
+  const tasks = selectedTasks;
+  const progress = selectedProgress;
 
-  const dates = Array.from(new Set(leaderboard.map((r) => r.recorded_at))).sort();
-  const latestDate = dates[dates.length - 1];
-  const sortedLatest = leaderboard
-    .filter((r) => r.recorded_at === latestDate)
-    .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
+  const latestDate = latestSnapshotDate(cohort);
+  const standings = latestDate ? computeStandings(rowsForDate(cohort, latestDate)) : [];
 
   const sprintStats = (() => {
     if (!tasks.length || !profiles.length) return { pct: 0, done: 0, total: 0 };
@@ -458,65 +616,244 @@ export function DashboardPresent() {
     return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
   })();
 
+  const founderUpdates = profiles.map((p) => ({
+    profile: p,
+    update: meetingUpdates.find((u) => u.user_id === p.user_id),
+  }));
+  const filledCount = founderUpdates.filter(
+    (f) => f.update && (f.update.success || f.update.challenge || f.update.learning),
+  ).length;
+
+  const president = profiles.find((p) => p.is_president) ?? null;
+
   return (
     <div className="min-h-screen bg-white text-ink p-8 lg:p-12">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex items-center justify-between border-b border-border pb-6">
+      <div className="max-w-6xl mx-auto space-y-10">
+        {/* === HEADER === */}
+        <div className="flex items-start justify-between border-b border-border pb-6 flex-wrap gap-4">
           <div>
-            <div className="text-sm uppercase tracking-wider text-muted">Working Group · FI Core Program · CEE, Spring 2026</div>
-            <h1 className="text-4xl font-bold text-primary-deep">Team Breakers</h1>
+            <div className="text-sm uppercase tracking-wider text-muted">
+              Working Group · FI Core Program · CEE, Spring 2026
+            </div>
+            <h1 className="text-4xl font-bold text-primary-deep">Breakers Team</h1>
           </div>
           <div className="text-right">
-            <div className="text-sm text-muted">{format(new Date(), 'EEEE, MMMM d, yyyy')}</div>
-            {sprint && <div className="text-lg font-semibold mt-1">{sprint.name}</div>}
+            <div className="text-sm text-muted">{safeFormat(new Date(), 'EEEE, MMMM d, yyyy')}</div>
+            {president && (
+              <div className="text-xs text-muted mt-1">
+                President: {president.full_name}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2 bg-bubble/40 rounded-2xl p-6">
-            <div className="text-xs uppercase tracking-wider text-muted mb-2">FI Leaderboard</div>
-            <div className="space-y-2">
-              {sortedLatest.map((r) => {
-                const ours = r.team_name === OUR_TEAM;
-                return (
-                  <div
-                    key={r.id}
-                    className={
-                      'flex items-center gap-4 p-3 rounded-xl ' +
-                      (ours ? 'bg-primary text-white' : 'bg-white')
-                    }
-                  >
-                    <div className="text-2xl font-bold w-8">{r.rank}</div>
-                    <div className="flex-1 text-lg font-medium">{r.team_name}</div>
-                    <div className="font-mono text-2xl font-bold">{Number(r.score).toFixed(1)}</div>
+        {/* === WEEK SELECTOR === */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs uppercase tracking-wider text-muted">Showing</span>
+          <div className="flex flex-wrap gap-1.5">
+            {allSprints.map((s) => {
+              const active = s.id === selectedSprintId;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSprintId(s.id)}
+                  className={
+                    'px-3 h-9 rounded-lg text-sm font-medium border transition-colors ' +
+                    (active
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-muted border-border hover:text-ink')
+                  }
+                  title={s.name}
+                >
+                  {s.week_number === 0 ? 'W0 · Onboarding' : `W${s.week_number}`}
+                  {s.is_current && !active && (
+                    <span className="ml-1 text-primary opacity-80">●</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {sprint && (
+            <div className="ml-auto text-sm">
+              <span className="text-muted">Currently:</span>{' '}
+              <span className="font-semibold">{sprint.name}</span>
+              <span className="text-xs text-muted ml-2">
+                {safeFormat(sprint.start_date, 'MMM d')} – {safeFormat(sprint.end_date, 'MMM d')}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* === SPRINT DELIVERABLES (right under "Currently") === */}
+        <section>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-bg rounded-2xl p-6">
+              <div className="text-xs uppercase tracking-wider text-muted mb-2">
+                Sprint deliverables
+              </div>
+              {sprint ? (
+                <>
+                  <div className="text-2xl font-semibold">
+                    Week {sprint.week_number} · {sprint.name}
                   </div>
-                );
-              })}
-              {!sortedLatest.length && <div className="text-muted">No leaderboard data yet.</div>}
+                  {sprint.description && (
+                    <div className="text-sm text-muted mt-1">{sprint.description}</div>
+                  )}
+                  <div className="text-xs text-muted mt-2">
+                    {safeFormat(sprint.start_date, 'MMM d')} –{' '}
+                    {safeFormat(sprint.end_date, 'MMM d')}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted">No active sprint.</div>
+              )}
+            </div>
+            <div className="bg-bubble/40 rounded-2xl p-6 text-center">
+              <div className="text-xs uppercase tracking-wider text-muted mb-2">
+                Founders completed
+              </div>
+              <div className="text-6xl font-bold text-primary-deep">
+                {selectedCompletions.length}
+                <span className="text-2xl text-muted">/ {profiles.length}</span>
+              </div>
+              <div className="text-sm text-muted mt-1">marked this sprint done</div>
+              <div className="h-3 mt-4 bg-white rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary"
+                  style={{
+                    width: `${
+                      profiles.length
+                        ? Math.round((selectedCompletions.length / profiles.length) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              {tasks.length > 0 && (
+                <div className="text-[11px] text-muted mt-3 pt-3 border-t border-border/40">
+                  Task board: <strong>{sprintStats.done}</strong> of{' '}
+                  <strong>{sprintStats.total}</strong> cells done
+                </div>
+              )}
             </div>
           </div>
-          <div className="bg-bg rounded-2xl p-6">
-            <div className="text-xs uppercase tracking-wider text-muted mb-2">Sprint progress</div>
-            <div className="text-6xl font-bold text-primary-deep">{sprintStats.pct}%</div>
-            <div className="text-sm text-muted mt-1">
-              {sprintStats.done} of {sprintStats.total} cells done
-            </div>
-            <div className="h-3 mt-4 bg-white rounded-full overflow-hidden">
-              <div className="h-full bg-primary" style={{ width: `${sprintStats.pct}%` }} />
-            </div>
-          </div>
-        </div>
+        </section>
 
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted mb-3">Pitches</div>
-          <div className="grid grid-cols-5 gap-4">
+        {/* === AGENDA === */}
+        <section>
+          <div className="text-xs uppercase tracking-wider text-muted mb-3">Today's agenda</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {AGENDA.map((a, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 bg-bg rounded-xl px-4 py-3"
+              >
+                <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center text-sm font-bold">
+                  {i + 1}
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium">{a.label}</div>
+                  <div className="text-xs text-muted">{a.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* === 2. ROUND-ROBIN — primary block === */}
+        <section>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted">
+                Round-robin · 1 success / 1 challenge / 1 learning
+              </div>
+              <h2 className="text-2xl font-semibold">This week's reflections</h2>
+            </div>
+            <div className="text-sm text-muted">
+              {filledCount}/{profiles.length} founders submitted
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {founderUpdates.map(({ profile: p, update: u }) => {
+              const empty = !u || (!u.success && !u.challenge && !u.learning);
+              return (
+                <div
+                  key={p.user_id}
+                  className={
+                    'rounded-xl p-4 ' +
+                    (empty ? 'bg-bg/60 border border-dashed border-border' : 'bg-bg')
+                  }
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Avatar name={p.full_name || '?'} src={p.avatar_url} size="sm" />
+                    <div className="font-semibold">{p.full_name}</div>
+                    {p.is_president && (
+                      <span className="ml-1 text-[10px] uppercase tracking-wider text-primary-deep bg-bubble px-1.5 py-0.5 rounded">
+                        President
+                      </span>
+                    )}
+                  </div>
+                  {empty ? (
+                    <div className="text-sm text-muted italic">No reflections yet.</div>
+                  ) : (
+                    <div className="space-y-1.5 text-sm">
+                      {u?.success && (
+                        <div>
+                          <span className="text-ok font-bold">✓ Success:</span> {u.success}
+                        </div>
+                      )}
+                      {u?.challenge && (
+                        <div>
+                          <span className="text-warn font-bold">! Challenge:</span> {u.challenge}
+                        </div>
+                      )}
+                      {u?.learning && (
+                        <div>
+                          <span className="text-primary-deep font-bold">★ Learning:</span>{' '}
+                          {u.learning}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* === 4. PITCH READINESS === */}
+        <section>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted">
+                Feedback Pitch readiness
+              </div>
+              <h2 className="text-2xl font-semibold">Pitches for this session</h2>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {profiles.map((p) => {
               const pitch = latestPitchByUser[p.user_id];
               const ready = pitch?.status === 'ready' || pitch?.status === 'reviewed';
               return (
                 <div key={p.user_id} className="text-center">
-                  <Avatar name={p.full_name || '?'} src={p.avatar_url} size="xl" className="mx-auto" />
-                  <div className="font-semibold mt-2">
+                  <div className="relative inline-block">
+                    <Avatar
+                      name={p.full_name || '?'}
+                      src={p.avatar_url}
+                      size="xl"
+                      className="mx-auto"
+                    />
+                    <span
+                      className={
+                        'absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white grid place-items-center text-[10px] font-bold ' +
+                        (ready ? 'bg-ok text-white' : 'bg-bg border-border text-muted')
+                      }
+                    >
+                      {ready ? '✓' : '·'}
+                    </span>
+                  </div>
+                  <div className="font-semibold mt-2 truncate">
                     {(p.full_name || 'Unnamed').split(' ')[0]}
                   </div>
                   <div className="text-sm">
@@ -529,32 +866,46 @@ export function DashboardPresent() {
               );
             })}
           </div>
-        </div>
+        </section>
 
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted mb-3">This week — round robin</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {profiles.map((p) => {
-              const u = meetingUpdates.find((x) => x.user_id === p.user_id);
-              if (!u || (!u.success && !u.challenge && !u.learning)) return null;
+        {/* === 5. LEADERBOARD (background context, last) === */}
+        <section className="pt-4 border-t border-border">
+          <div className="text-xs uppercase tracking-wider text-muted mb-3">
+            FI Cohort Leaderboard · context
+          </div>
+          <div className="bg-bg rounded-2xl p-4 space-y-1.5">
+            {standings.map((s) => {
+              const ours = s.team_name === OUR_TEAM;
               return (
-                <div key={p.user_id} className="bg-bg rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Avatar name={p.full_name} src={p.avatar_url} size="sm" />
-                    <div className="font-semibold">{p.full_name}</div>
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    {u.success && <div><span className="text-ok font-bold">✓ Success:</span> {u.success}</div>}
-                    {u.challenge && <div><span className="text-warn font-bold">! Challenge:</span> {u.challenge}</div>}
-                    {u.learning && <div><span className="text-primary-deep font-bold">★ Learning:</span> {u.learning}</div>}
+                <div
+                  key={s.team_name}
+                  className={
+                    'flex items-center gap-3 p-2.5 rounded-lg ' +
+                    (ours ? 'bg-primary text-white' : 'bg-white')
+                  }
+                >
+                  <div className="text-lg font-bold w-7">{s.rank}</div>
+                  <div className="flex-1 font-medium">{s.team_name}</div>
+                  {ours && (
+                    <span className="text-xs uppercase tracking-wider opacity-90">Us</span>
+                  )}
+                  <div className="font-mono text-lg font-bold">
+                    {s.avg_score == null ? '—' : s.avg_score.toFixed(1)}
                   </div>
                 </div>
               );
             })}
+            {!standings.length && (
+              <div className="text-sm text-muted">No leaderboard data yet.</div>
+            )}
           </div>
-        </div>
+        </section>
 
-        <div className="text-center pt-6 border-t border-border">
+        {/* === FOOTER === */}
+        <div className="flex items-center justify-between pt-6 border-t border-border">
+          <div className="text-xs text-muted italic">
+            Thanks to Adeo Ressi · OpenClaw AI Productivity Bootcamp
+          </div>
           <Link to="/" className="text-sm text-muted hover:text-ink">
             ← Back to dashboard
           </Link>

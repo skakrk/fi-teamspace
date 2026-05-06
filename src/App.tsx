@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { Login } from '@/pages/Login';
+import { ResetPassword } from '@/pages/ResetPassword';
 import { Dashboard, DashboardPresent } from '@/pages/Dashboard';
 import { Team } from '@/pages/Team';
 import { ProfileDetail } from '@/pages/ProfileDetail';
@@ -14,7 +15,17 @@ import { Sprints } from '@/pages/Sprints';
 import { Polls } from '@/pages/Polls';
 import { PollDetail } from '@/pages/PollDetail';
 import { Leaderboard } from '@/pages/Leaderboard';
+import { Resources } from '@/pages/Resources';
+import { CourseProgress } from '@/pages/CourseProgress';
+import { CohortPresent } from '@/pages/CohortPresent';
+import { Admin } from '@/pages/Admin';
 import { ConfigBanner } from '@/components/shared/ConfigBanner';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import type { ReactNode } from 'react';
+
+function Guarded({ label, children }: { label: string; children: ReactNode }) {
+  return <ErrorBoundary label={label}>{children}</ErrorBoundary>;
+}
 
 function Loading() {
   return (
@@ -34,6 +45,7 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -41,20 +53,39 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/dashboard/present" element={<DashboardPresent />} />
+      <Route path="/auth/reset" element={<ResetPassword />} />
+      <Route
+        path="/dashboard/present"
+        element={
+          <Guarded label="Present mode (working group)">
+            <DashboardPresent />
+          </Guarded>
+        }
+      />
+      <Route
+        path="/dashboard/cohort"
+        element={
+          <Guarded label="Present mode (cohort session)">
+            <CohortPresent />
+          </Guarded>
+        }
+      />
       <Route element={<AppShell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="/team" element={<Team />} />
-        <Route path="/team/:userId" element={<ProfileDetail />} />
-        <Route path="/profile" element={<MyProfile />} />
-        <Route path="/pitches" element={<Pitches />} />
-        <Route path="/pitches/:userId" element={<PitchDetail />} />
-        <Route path="/meetings" element={<Meetings />} />
-        <Route path="/meetings/:id" element={<MeetingDetail />} />
-        <Route path="/sprints" element={<Sprints />} />
-        <Route path="/polls" element={<Polls />} />
-        <Route path="/polls/:id" element={<PollDetail />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route index element={<Guarded label="Dashboard"><Dashboard /></Guarded>} />
+        <Route path="/team" element={<Guarded label="Team"><Team /></Guarded>} />
+        <Route path="/team/:userId" element={<Guarded label="Profile"><ProfileDetail /></Guarded>} />
+        <Route path="/profile" element={<Guarded label="My profile"><MyProfile /></Guarded>} />
+        <Route path="/pitches" element={<Guarded label="Pitches"><Pitches /></Guarded>} />
+        <Route path="/pitches/:userId" element={<Guarded label="Pitch detail"><PitchDetail /></Guarded>} />
+        <Route path="/meetings" element={<Guarded label="Meetings"><Meetings /></Guarded>} />
+        <Route path="/meetings/:id" element={<Guarded label="Meeting detail"><MeetingDetail /></Guarded>} />
+        <Route path="/sprints" element={<Guarded label="Sprints"><Sprints /></Guarded>} />
+        <Route path="/polls" element={<Guarded label="Polls"><Polls /></Guarded>} />
+        <Route path="/polls/:id" element={<Guarded label="Poll"><PollDetail /></Guarded>} />
+        <Route path="/leaderboard" element={<Guarded label="Leaderboard"><Leaderboard /></Guarded>} />
+        <Route path="/progress" element={<Guarded label="Course progress"><CourseProgress /></Guarded>} />
+        <Route path="/resources" element={<Guarded label="Resources"><Resources /></Guarded>} />
+        <Route path="/admin" element={<Guarded label="Admin"><Admin /></Guarded>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

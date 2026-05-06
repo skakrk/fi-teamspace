@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeam } from '@/hooks/useTeam';
 import { supabase, type DbPoll } from '@/lib/supabase';
-import { CompassIcon } from '@/components/icons/StartupIcons';
+import { Vote } from 'lucide-react';
+import { notifyError } from '@/lib/notify';
 
 export function Polls() {
   const { user } = useAuth();
@@ -34,10 +35,20 @@ export function Polls() {
   }, []);
 
   async function create() {
-    if (!user || !draft.title) return;
+    if (!user) {
+      notifyError('Not signed in', 'Please sign in again.');
+      return;
+    }
+    if (!draft.title.trim()) {
+      notifyError('Title required', 'Enter a poll title.');
+      return;
+    }
     const labels = draft.options.map((o) => o.trim()).filter(Boolean);
-    if (labels.length < 2) return;
-    const { data: poll } = await supabase
+    if (labels.length < 2) {
+      notifyError('Not enough options', 'Add at least 2 options.');
+      return;
+    }
+    const { data: poll, error } = await supabase
       .from('polls')
       .insert({
         title: draft.title,
@@ -50,13 +61,18 @@ export function Polls() {
       })
       .select()
       .maybeSingle();
-    if (poll) {
-      const rows = labels.map((label, i) => ({
-        poll_id: (poll as DbPoll).id,
-        label,
-        sort_order: i + 1,
-      }));
-      await supabase.from('poll_options').insert(rows);
+    if (error || !poll) {
+      notifyError('Could not create poll', error ?? 'Unknown error');
+      return;
+    }
+    const rows = labels.map((label, i) => ({
+      poll_id: (poll as DbPoll).id,
+      label,
+      sort_order: i + 1,
+    }));
+    const { error: optErr } = await supabase.from('poll_options').insert(rows);
+    if (optErr) {
+      notifyError('Poll created but options failed', optErr);
     }
     setOpen(false);
     setDraft({ title: '', description: '', is_anonymous: false, deadline: '', options: ['', ''] });
@@ -67,7 +83,16 @@ export function Polls() {
     setDraft({
       title: 'President Election',
       description:
-        'Vote for the next President of the Working Group. The President moderates meetings, keeps time, and records minutes.',
+        'Vote for the next President of the Working Group. The President provides accountability and structure to the WG meetings — similar to a Board Chair.\n\n' +
+        'President\'s responsibilities (per FI guide):\n' +
+        '1. Ensure all teammates have Feedback Pitches ready before every session.\n' +
+        '2. Keep time for teammates\' Feedback Pitches so everyone gets mentor feedback.\n' +
+        '3. Record and post the Working Group Meeting Minutes.\n' +
+        '4. Record Attendance.\n' +
+        '5. Act as timekeeper during the meetings.\n' +
+        '6. Moderate the meeting — keep founders focused and guide discussion.\n' +
+        '7. Identify founder performance issues and report them to the Local Director.\n\n' +
+        'Where possible, pick someone who has not been President before.',
       is_anonymous: true,
       deadline: '',
       options: profiles.map((p) => p.full_name || 'Unnamed'),
@@ -80,7 +105,7 @@ export function Polls() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="h1 flex items-center gap-2">
-            <CompassIcon className="text-primary-dark" /> Polls
+            <Vote className="text-primary-dark" size={22} /> Polls
           </h1>
           <p className="muted text-sm mt-1">Decisions, elections, and quick votes.</p>
         </div>

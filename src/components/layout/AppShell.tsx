@@ -1,35 +1,46 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LogOut, Menu } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import {
+  LogOut,
+  Menu,
+  LayoutDashboard,
+  Handshake,
+  Megaphone,
+  CalendarClock,
+  Target,
+  GraduationCap,
+  Vote,
+  Trophy,
+  BookOpenCheck,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  RocketIcon,
-  TargetIcon,
-  GrowthIcon,
-  TrophyIcon,
-  HandshakeIcon,
-  MegaphoneIcon,
-  CompassIcon,
-  StopwatchIcon,
-} from '@/components/icons/StartupIcons';
+import { Logo } from '@/components/shared/Logo';
+import { isAdmin } from '@/lib/admin';
 
-type NavItem = { to: string; label: string; icon: (p: React.SVGProps<SVGSVGElement>) => ReactNode };
+type NavItem = { to: string; label: string; icon: LucideIcon };
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: GrowthIcon },
-  { to: '/team', label: 'Team', icon: HandshakeIcon },
-  { to: '/pitches', label: 'Pitches', icon: MegaphoneIcon },
-  { to: '/meetings', label: 'Meetings', icon: StopwatchIcon },
-  { to: '/sprints', label: 'Sprints', icon: TargetIcon },
-  { to: '/polls', label: 'Polls', icon: CompassIcon },
-  { to: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
+  { to: '/',            label: 'Dashboard',       icon: LayoutDashboard },
+  { to: '/team',        label: 'Team',            icon: Handshake },
+  { to: '/pitches',     label: 'Pitches',         icon: Megaphone },
+  { to: '/meetings',    label: 'Meetings',        icon: CalendarClock },
+  { to: '/sprints',     label: 'Sprints',         icon: Target },
+  { to: '/progress',    label: 'Course progress', icon: GraduationCap },
+  { to: '/polls',       label: 'Polls',           icon: Vote },
+  { to: '/leaderboard', label: 'Leaderboard',     icon: Trophy },
+  { to: '/resources',   label: 'Resources',       icon: BookOpenCheck },
 ];
 
 export function AppShell() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navItems: NavItem[] = isAdmin(user)
+    ? [...NAV, { to: '/admin', label: 'Admin', icon: Shield }]
+    : NAV;
 
   return (
     <div className="min-h-screen flex bg-bg">
@@ -40,16 +51,14 @@ export function AppShell() {
         )}
       >
         <div className="px-5 py-5 border-b border-border flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center">
-            <RocketIcon width={20} height={20} />
-          </div>
+          <Logo size="md" />
           <div>
             <div className="text-sm font-semibold text-ink leading-none">FI Teamspace</div>
-            <div className="text-xs text-muted mt-1">Team Breakers</div>
+            <div className="text-xs text-muted mt-1">Breakers Team</div>
           </div>
         </div>
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -84,6 +93,11 @@ export function AppShell() {
             Sign out
           </button>
           <div className="text-xs text-muted px-3 mt-2 truncate">{user?.email}</div>
+          <div className="text-[10px] text-muted/70 px-3 mt-3 italic leading-tight">
+            Thanks to Adeo Ressi
+            <br />
+            OpenClaw AI Productivity Bootcamp
+          </div>
         </div>
       </aside>
 
