@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Login } from '@/pages/Login';
 import { ResetPassword } from '@/pages/ResetPassword';
 import { Security } from '@/pages/Security';
+import { UserGuide } from '@/pages/UserGuide';
 import { Dashboard, DashboardPresent } from '@/pages/Dashboard';
 import { Team } from '@/pages/Team';
 import { ProfileDetail } from '@/pages/ProfileDetail';
@@ -48,6 +49,7 @@ export function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/security" element={<Security />} />
+        <Route path="/guide" element={<UserGuide />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -57,6 +59,7 @@ export function App() {
     <Routes>
       <Route path="/auth/reset" element={<ResetPassword />} />
       <Route path="/security" element={<Security />} />
+      <Route path="/guide" element={<UserGuide />} />
       <Route
         path="/dashboard/present"
         element={

@@ -173,7 +173,11 @@ export function Login() {
         <div className="pointer-events-auto">
           Designed and developed by Konstantin Skavitin
         </div>
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto flex items-center gap-3">
+          <Link to="/guide" className="hover:text-ink hover:underline">
+            User guide
+          </Link>
+          <span aria-hidden className="text-muted/40">·</span>
           <Link to="/security" className="hover:text-ink hover:underline">
             How we store passwords
           </Link>
