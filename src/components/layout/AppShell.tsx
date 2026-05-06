@@ -53,7 +53,7 @@ export function AppShell() {
         <div className="px-5 py-5 border-b border-border flex items-center gap-3">
           <Logo size="md" />
           <div>
-            <div className="text-sm font-semibold text-ink leading-none">FI Teamspace</div>
+            <div className="text-sm font-semibold text-ink leading-none">Best Teamspace</div>
             <div className="text-xs text-muted mt-1">Breakers Team</div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export function AppShell() {
           >
             <Menu size={20} />
           </button>
-          <div className="font-semibold">FI Teamspace</div>
+          <div className="font-semibold">Best Teamspace</div>
         </header>
         <main className="flex-1 min-w-0">
           <div className="container-app py-6">

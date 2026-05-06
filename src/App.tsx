@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { Login } from '@/pages/Login';
 import { ResetPassword } from '@/pages/ResetPassword';
+import { Security } from '@/pages/Security';
 import { Dashboard, DashboardPresent } from '@/pages/Dashboard';
 import { Team } from '@/pages/Team';
 import { ProfileDetail } from '@/pages/ProfileDetail';
@@ -46,6 +47,7 @@ export function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/auth/reset" element={<ResetPassword />} />
+        <Route path="/security" element={<Security />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -54,6 +56,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/auth/reset" element={<ResetPassword />} />
+      <Route path="/security" element={<Security />} />
       <Route
         path="/dashboard/present"
         element={

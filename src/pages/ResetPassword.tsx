@@ -68,12 +68,10 @@ export function ResetPassword() {
   return (
     <div className="min-h-screen grid place-items-center bg-bg p-6">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <Logo size="lg" />
-          <div>
-            <h1 className="text-lg font-semibold leading-none">FI Teamspace</h1>
-            <p className="text-xs text-muted mt-1">Reset your password</p>
-          </div>
+        <div className="flex flex-col items-center text-center mb-6">
+          <Logo size="2xl" className="rounded-2xl shadow-card" />
+          <h1 className="text-3xl font-bold mt-5">Best Teamspace</h1>
+          <p className="text-base text-muted mt-2">Reset your password</p>
         </div>
 
         <div className="bg-surface border border-border rounded-xl shadow-card p-6">

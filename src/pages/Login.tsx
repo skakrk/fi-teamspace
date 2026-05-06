@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input, Label } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,16 +63,14 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center bg-bg p-6">
+    <div className="min-h-screen grid place-items-center bg-bg p-6 relative">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <Logo size="lg" />
-          <div>
-            <h1 className="text-lg font-semibold leading-none">FI Teamspace</h1>
-            <p className="text-xs text-muted mt-1">
-              Breakers Team · FI Core Program (CEE, Spring 2026)
-            </p>
-          </div>
+        <div className="flex flex-col items-center text-center mb-6">
+          <Logo size="2xl" className="rounded-2xl shadow-card" />
+          <h1 className="text-3xl font-bold mt-5">Best Teamspace</h1>
+          <p className="text-base text-muted mt-2">
+            Breakers Team · FI Core Program (CEE, Spring 2026)
+          </p>
         </div>
 
         <div className="bg-surface border border-border rounded-xl shadow-card p-6">
@@ -167,6 +166,17 @@ export function Login() {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-4 inset-x-4 flex items-center justify-between gap-4 text-[11px] text-muted/80 leading-snug pointer-events-none">
+        <div className="pointer-events-auto">
+          Designed and developed by Konstantin Skavitin
+        </div>
+        <div className="pointer-events-auto">
+          <Link to="/security" className="hover:text-ink hover:underline">
+            How we store passwords
+          </Link>
         </div>
       </div>
     </div>

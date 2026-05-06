@@ -6,7 +6,7 @@ export function ConfigBanner() {
       <div className="max-w-xl w-full bg-surface border border-border rounded-xl shadow-card p-8">
         <div className="flex items-center gap-3 mb-4">
           <Logo size="lg" />
-          <h1 className="text-xl font-semibold">FI Teamspace — Setup needed</h1>
+          <h1 className="text-xl font-semibold">Best Teamspace — Setup needed</h1>
         </div>
         <p className="text-sm text-muted mb-4">
           Supabase is not configured. Create a Supabase project, run{' '}
