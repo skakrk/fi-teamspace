@@ -25,7 +25,7 @@ import {
   latestSnapshotDate,
   rowsForDate,
 } from '@/lib/standings';
-import { LayoutDashboard, Megaphone, CalendarClock, Crown } from 'lucide-react';
+import { LayoutDashboard, Megaphone, CalendarClock, Briefcase } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
 import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
@@ -357,7 +357,7 @@ export function Dashboard() {
         <Card className="border-primary/40 bg-bubble/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Crown size={18} className="text-primary-deep" /> President checklist — your accountability
+              <Briefcase size={18} className="text-primary-deep" /> President checklist — your accountability
             </CardTitle>
           </CardHeader>
           <CardBody>
