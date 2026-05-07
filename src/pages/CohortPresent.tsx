@@ -197,15 +197,17 @@ export function CohortPresent() {
     })();
   }, [selectedSprintId, allSprints]);
 
-  // Latest pitch per founder (independent of selected week, FI cohort always presents
-  // the most recent version).
+  // Latest pitch per founder for the selected week — pitches are tagged with a
+  // sprint_id at creation, so a cohort session presented for week N shows the
+  // pitches that were submitted for week N (not the current latest overall).
   const latestPitchByUser = useMemo(() => {
     const m: Record<string, DbPitch> = {};
     for (const p of data?.pitches ?? []) {
+      if (selectedSprintId && p.sprint_id !== selectedSprintId) continue;
       if (!m[p.user_id] || m[p.user_id].version < p.version) m[p.user_id] = p;
     }
     return m;
-  }, [data?.pitches]);
+  }, [data?.pitches, selectedSprintId]);
 
   if (!data) return <div className="min-h-screen grid place-items-center">Loading…</div>;
 

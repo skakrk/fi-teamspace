@@ -4,6 +4,7 @@ import { Play, Square, RotateCw, Trash2 } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import { FieldHint, Input, Label, Textarea } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +13,7 @@ import {
   supabase,
   type DbPitch,
   type DbPitchFeedback,
+  type DbSprint,
   type PitchStatus,
 } from '@/lib/supabase';
 import { avg, extractYouTubeId, formatScore } from '@/lib/utils';
@@ -165,6 +167,12 @@ export function PitchDetail() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = pitches.find((p) => p.id === activeId) || null;
 
+  // sprints for picking which week a new pitch belongs to
+  const [sprints, setSprints] = useState<DbSprint[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSprintId, setCreateSprintId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
   // edit form for owner on active pitch
   const [draft, setDraft] = useState<Partial<DbPitch>>({});
 
@@ -196,6 +204,16 @@ export function PitchDetail() {
   }, [userId]);
 
   useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('sprints')
+        .select('*')
+        .order('week_number', { ascending: true });
+      setSprints((data as DbSprint[]) || []);
+    })();
+  }, []);
+
+  useEffect(() => {
     if (active) {
       setDraft({
         text_md: active.text_md,
@@ -225,8 +243,19 @@ export function PitchDetail() {
   const clarityAvg = avg(fbForActive.map((f) => f.score_clarity));
   const persuasiveAvg = avg(fbForActive.map((f) => f.score_persuasive));
 
+  function openCreateDialog() {
+    // Default the picker to the current sprint, falling back to the seed pitch's
+    // sprint or the latest available sprint.
+    const seed = pitches[0];
+    const cur = sprints.find((s) => s.is_current);
+    const fallback = cur?.id ?? seed?.sprint_id ?? sprints[sprints.length - 1]?.id ?? null;
+    setCreateSprintId(fallback);
+    setCreateOpen(true);
+  }
+
   async function createNewVersion() {
     if (!user || !userId) return;
+    setCreating(true);
     const nextVersion = (pitches[0]?.version ?? 0) + 1;
     const seed = pitches[0];
     const { data, error } = await supabase
@@ -239,10 +268,17 @@ export function PitchDetail() {
         video_url: seed?.video_url ?? null,
         deck_url: seed?.deck_url ?? null,
         status: 'draft' as PitchStatus,
+        sprint_id: createSprintId,
       })
       .select()
       .maybeSingle();
-    if (!error && data) {
+    setCreating(false);
+    if (error) {
+      notifyError('Could not create pitch', error);
+      return;
+    }
+    setCreateOpen(false);
+    if (data) {
       await reload();
       setActiveId((data as DbPitch).id);
     }
@@ -335,6 +371,14 @@ export function PitchDetail() {
                 >
                   <div className="font-medium">v{p.version}</div>
                   <div className="text-xs text-muted capitalize">{p.status.replace('_', ' ')}</div>
+                  {(() => {
+                    const sp = sprints.find((s) => s.id === p.sprint_id);
+                    return sp ? (
+                      <div className="text-[10px] text-muted mt-0.5">
+                        W{sp.week_number} · {sp.name}
+                      </div>
+                    ) : null;
+                  })()}
                 </button>
                 {isOwner && (
                   <button
@@ -351,7 +395,7 @@ export function PitchDetail() {
             {!pitches.length && <div className="text-sm text-muted">No versions yet.</div>}
           </div>
           {isOwner && (
-            <Button size="sm" className="w-full mt-3" onClick={createNewVersion}>
+            <Button size="sm" className="w-full mt-3" onClick={openCreateDialog}>
               + New version
             </Button>
           )}
@@ -573,6 +617,49 @@ export function PitchDetail() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="New pitch version"
+        description="Pick the week this pitch belongs to."
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={creating || !createSprintId} onClick={createNewVersion}>
+              {creating ? 'Creating…' : 'Create'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <Label>Week</Label>
+            <select
+              value={createSprintId ?? ''}
+              onChange={(e) => setCreateSprintId(e.target.value || null)}
+              className="w-full rounded-lg border border-border bg-white text-ink px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary h-10"
+            >
+              <option value="" disabled>
+                Select a week…
+              </option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  W{s.week_number} · {s.name}
+                  {s.is_current ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+            <FieldHint>
+              Versions show up in Working Group and Cohort Session views for the week
+              they belong to.
+            </FieldHint>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
