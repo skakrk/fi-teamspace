@@ -206,7 +206,11 @@ export function MeetingDetail() {
               {format(dt, 'EEEE · HH:mm')} · {m.duration_min} min
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
-              <Badge tone={m.status === 'upcoming' ? 'ok' : 'neutral'}>{m.status}</Badge>
+              {(() => {
+                const startMs = new Date(m.scheduled_at).getTime();
+                const past = Number.isFinite(startMs) && startMs + (m.duration_min || 0) * 60000 < Date.now();
+                return <Badge tone={past ? 'neutral' : 'ok'}>{past ? 'past' : 'upcoming'}</Badge>;
+              })()}
               <Badge tone={m.kind === 'cohort_session' ? 'warn' : 'default'}>
                 {m.kind === 'cohort_session' ? <Users size={11} /> : null}
                 {m.kind === 'cohort_session' ? 'Cohort Session' : 'Working Group'}
