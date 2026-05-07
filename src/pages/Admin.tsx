@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Crown, Trash2, Plus, Shield } from 'lucide-react';
+import { Briefcase, Trash2, Plus, Shield } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -144,7 +144,7 @@ export function Admin() {
                       </span>
                       {p.is_president && (
                         <Badge tone="primary">
-                          <Crown size={11} /> President
+                          <Briefcase size={11} /> President
                         </Badge>
                       )}
                     </div>
@@ -165,7 +165,7 @@ export function Admin() {
                         variant="outline"
                         onClick={() => setPresident(p, true)}
                       >
-                        <Crown size={14} /> Make president
+                        <Briefcase size={14} /> Make president
                       </Button>
                     )}
                     <Button

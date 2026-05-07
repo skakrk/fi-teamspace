@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Crown, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { Briefcase, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
@@ -58,7 +58,7 @@ export function PresidentRoleCard({
     <Card>
       <CardHeader className="flex items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <Crown size={18} className="text-primary-dark" /> President role &amp; responsibilities
+          <Briefcase size={18} className="text-primary-dark" /> President role &amp; responsibilities
         </CardTitle>
         <button
           type="button"
