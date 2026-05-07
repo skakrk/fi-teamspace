@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
+import { Check, Link2 } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTeam } from '@/hooks/useTeam';
@@ -59,31 +59,6 @@ export function CohortPresent() {
   const { profiles } = useTeam();
   const [data, setData] = useState<Bundle | null>(null);
   const [copied, setCopied] = useState(false);
-  const [cohortSessions, setCohortSessions] = useState<DbMeeting[]>([]);
-  const [cohortIdx, setCohortIdx] = useState(0); // 0 = newest
-
-  // Load cohort sessions list (sorted newest first) and pick a sensible default.
-  useEffect(() => {
-    (async () => {
-      const { data: rows } = await supabase
-        .from('meetings')
-        .select('*')
-        .eq('kind', 'cohort_session')
-        .order('scheduled_at', { ascending: false });
-      const list = (rows as DbMeeting[]) || [];
-      setCohortSessions(list);
-      if (list.length) {
-        const nowIso = new Date().toISOString();
-        // Default: most recent past session, otherwise the oldest upcoming one.
-        const pastIdx = list.findIndex((m) => m.scheduled_at <= nowIso);
-        setCohortIdx(pastIdx === -1 ? list.length - 1 : pastIdx);
-      }
-    })();
-  }, []);
-
-  const selectedCohort = cohortSessions[cohortIdx] ?? null;
-  const hasNewer = cohortIdx > 0;
-  const hasOlder = cohortIdx < cohortSessions.length - 1;
 
   async function copyShareLink() {
     const url = window.location.href;
@@ -303,67 +278,6 @@ export function CohortPresent() {
             </div>
           )}
         </div>
-
-        {/* === COHORT SESSION SELECTOR === */}
-        {cohortSessions.length > 0 && selectedCohort && (() => {
-          const isUpcoming = new Date(selectedCohort.scheduled_at) > new Date();
-          const sessionNumber = cohortSessions.length - cohortIdx;
-          return (
-            <section className="bg-bubble/30 border border-primary/15 rounded-2xl p-5 sm:p-6">
-              <div className="flex items-stretch gap-3">
-                <button
-                  type="button"
-                  onClick={() => hasOlder && setCohortIdx((i) => i + 1)}
-                  disabled={!hasOlder}
-                  className="shrink-0 w-10 sm:w-12 grid place-items-center rounded-xl bg-white border border-border text-ink hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Previous cohort session"
-                  title="Previous cohort session"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <div className="flex-1 min-w-0 text-center">
-                  <div className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-muted">
-                    Cohort session {sessionNumber} of {cohortSessions.length}
-                    {isUpcoming ? ' · upcoming' : ''}
-                  </div>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 break-words">
-                    {selectedCohort.title}
-                  </div>
-                  <div className="text-sm text-muted mt-1">
-                    {safeFormat(selectedCohort.scheduled_at, 'EEEE, MMMM d, yyyy · HH:mm')}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => hasNewer && setCohortIdx((i) => i - 1)}
-                  disabled={!hasNewer}
-                  className="shrink-0 w-10 sm:w-12 grid place-items-center rounded-xl bg-white border border-border text-ink hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Next cohort session"
-                  title="Next cohort session"
-                >
-                  <ChevronRight size={22} />
-                </button>
-              </div>
-              {selectedCohort.agenda && (
-                <div className="mt-4 sm:mt-5 text-sm text-ink/80 whitespace-pre-line max-w-2xl mx-auto bg-white/60 rounded-xl p-4">
-                  {selectedCohort.agenda}
-                </div>
-              )}
-              {selectedCohort.meet_url && isUpcoming && (
-                <div className="text-center mt-4">
-                  <a
-                    href={selectedCohort.meet_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark"
-                  >
-                    Join meeting
-                  </a>
-                </div>
-              )}
-            </section>
-          );
-        })()}
 
         {/* === WHAT WE'RE WORKING ON (top) === */}
         <section>

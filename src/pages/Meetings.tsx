@@ -90,8 +90,6 @@ function MeetingItem({ m, onDelete }: { m: DbMeeting; onDelete: (m: DbMeeting) =
 
 const WG_AGENDA =
   'Welcome (5 min)\nReview previous challenges (10 min)\nRound: 1 success / 1 challenge per founder (45 min)\nSprint deliverables (30 min)\nOpen networking (20 min)\nClosing';
-const COHORT_AGENDA =
-  'Welcome from the Local Director\nMentor talk\nFeedback Pitches (Hot Seats)\nQ&A with mentor\nSprint deliverables overview\nClosing';
 
 export function Meetings() {
   const { user } = useAuth();
@@ -115,29 +113,6 @@ export function Meetings() {
     agenda: WG_AGENDA,
   });
   const [saving, setSaving] = useState(false);
-
-  function setKind(kind: MeetingKind) {
-    setDraft((d) => ({
-      ...d,
-      kind,
-      title:
-        kind === 'cohort_session'
-          ? d.title.startsWith('Working Group')
-            ? 'Cohort Session: '
-            : d.title
-          : d.title.startsWith('Cohort Session')
-          ? 'Working Group #'
-          : d.title,
-      agenda:
-        kind === 'cohort_session'
-          ? d.agenda === WG_AGENDA
-            ? COHORT_AGENDA
-            : d.agenda
-          : d.agenda === COHORT_AGENDA
-          ? WG_AGENDA
-          : d.agenda,
-    }));
-  }
 
   async function reload() {
     const { data } = await supabase.from('meetings').select('*').order('scheduled_at', {
@@ -241,35 +216,6 @@ export function Meetings() {
         }
       >
         <div className="space-y-4">
-          <div>
-            <Label>Type</Label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setKind('working_group')}
-                className={
-                  'flex-1 px-3 h-10 rounded-lg text-sm font-medium border transition-colors ' +
-                  (draft.kind === 'working_group'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-muted border-border hover:text-ink')
-                }
-              >
-                Working Group
-              </button>
-              <button
-                type="button"
-                onClick={() => setKind('cohort_session')}
-                className={
-                  'flex-1 px-3 h-10 rounded-lg text-sm font-medium border transition-colors inline-flex items-center justify-center gap-1.5 ' +
-                  (draft.kind === 'cohort_session'
-                    ? 'bg-amber-500 text-white border-amber-500'
-                    : 'bg-white text-muted border-border hover:text-ink')
-                }
-              >
-                <Users size={14} /> Cohort Session
-              </button>
-            </div>
-          </div>
           <div>
             <Label>Title</Label>
             <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
