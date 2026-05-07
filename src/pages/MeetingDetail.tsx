@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Download, Users, Video, ExternalLink, Mic, FileText, Trash2 } from 'lucide-react';
+import { Check, Download, Users, Video, ExternalLink, Mic, FileText, Trash2 } from 'lucide-react';
 import { notifyError } from '@/lib/notify';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -128,8 +128,12 @@ export function MeetingDetail() {
     await reload();
   }
 
+  const [notesSaveState, setNotesSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  );
   async function saveNotes() {
     if (!id) return;
+    setNotesSaveState('saving');
     const { error } = await supabase.from('meeting_notes').upsert(
       {
         meeting_id: id,
@@ -142,11 +146,22 @@ export function MeetingDetail() {
       },
       { onConflict: 'meeting_id' },
     );
-    if (error) notifyError('Could not save minutes', error);
+    if (error) {
+      setNotesSaveState('error');
+      notifyError('Could not save minutes', error);
+      return;
+    }
+    await reload();
+    setNotesSaveState('saved');
+    setTimeout(() => setNotesSaveState('idle'), 2000);
   }
 
+  const [recordingSaveState, setRecordingSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  );
   async function saveRecording() {
     if (!id) return;
+    setRecordingSaveState('saving');
     const { error } = await supabase
       .from('meetings')
       .update({
@@ -156,8 +171,14 @@ export function MeetingDetail() {
         summary: recordingDraft.summary.trim() || null,
       })
       .eq('id', id);
-    if (error) return notifyError('Could not save recording info', error);
+    if (error) {
+      setRecordingSaveState('error');
+      notifyError('Could not save recording info', error);
+      return;
+    }
     await reload();
+    setRecordingSaveState('saved');
+    setTimeout(() => setRecordingSaveState('idle'), 2000);
   }
 
   async function deleteMeeting() {
@@ -498,7 +519,21 @@ export function MeetingDetail() {
                 </button>
               )}
             </div>
-            <Button onClick={saveRecording}>Save</Button>
+            <Button
+              onClick={saveRecording}
+              disabled={recordingSaveState === 'saving'}
+              variant={recordingSaveState === 'saved' ? 'secondary' : 'primary'}
+            >
+              {recordingSaveState === 'saving'
+                ? 'Saving…'
+                : recordingSaveState === 'saved'
+                ? (
+                  <>
+                    <Check size={16} /> Saved
+                  </>
+                )
+                : 'Save'}
+            </Button>
           </div>
 
           {m.transcript_text && transcriptOpen && (
@@ -610,7 +645,21 @@ export function MeetingDetail() {
               </details>
 
               <div className="flex justify-end">
-                <Button onClick={saveNotes}>Save minutes</Button>
+                <Button
+                  onClick={saveNotes}
+                  disabled={notesSaveState === 'saving'}
+                  variant={notesSaveState === 'saved' ? 'secondary' : 'primary'}
+                >
+                  {notesSaveState === 'saving'
+                    ? 'Saving…'
+                    : notesSaveState === 'saved'
+                    ? (
+                      <>
+                        <Check size={16} /> Saved
+                      </>
+                    )
+                    : 'Save minutes'}
+                </Button>
               </div>
             </>
           )}
