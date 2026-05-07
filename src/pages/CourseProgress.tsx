@@ -171,7 +171,7 @@ export function CourseProgress() {
                 <tbody>
                   {milestones.map((m) => (
                     <tr key={m.id} className="border-t border-border">
-                      <td className="px-3 py-2 align-top w-72">
+                      <td className="px-3 py-2 align-top w-44 sm:w-72">
                         <div className="font-medium text-sm">{m.title}</div>
                       </td>
                       {profiles.map((p) => {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Check, Link2 } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTeam } from '@/hooks/useTeam';
@@ -57,6 +58,32 @@ type Bundle = {
 export function CohortPresent() {
   const { profiles } = useTeam();
   const [data, setData] = useState<Bundle | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function copyShareLink() {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for browsers without clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        window.prompt('Copy this link:', url);
+      }
+      document.body.removeChild(ta);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -208,14 +235,29 @@ export function CohortPresent() {
     }));
 
   return (
-    <div className="min-h-screen bg-white text-ink p-8 lg:p-14">
+    <div className="min-h-screen bg-white text-ink p-6 sm:p-8 lg:p-14 relative">
+      <button
+        onClick={copyShareLink}
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink hover:bg-bg transition-colors shadow-sm z-10"
+        aria-label="Copy share link"
+      >
+        {copied ? (
+          <>
+            <Check size={14} className="text-ok" /> Link copied
+          </>
+        ) : (
+          <>
+            <Link2 size={14} /> Copy share link
+          </>
+        )}
+      </button>
       <div className="max-w-6xl mx-auto space-y-12">
         {/* === HERO === */}
         <div className="text-center pb-6 border-b border-border">
           <div className="text-sm uppercase tracking-[0.2em] text-muted">
             Founder Institute · CEE Spring 2026
           </div>
-          <h1 className="text-6xl font-bold text-primary-deep mt-2">Breakers Team</h1>
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-primary-deep mt-2">Breakers Team</h1>
           {vision?.mission && (
             <p className="text-xl text-ink/80 mt-6 max-w-3xl mx-auto leading-relaxed">
               {vision.mission}
@@ -264,9 +306,9 @@ export function CohortPresent() {
               <div className="text-xs uppercase tracking-wider opacity-90 mb-2">
                 Founders completed
               </div>
-              <div className="text-7xl font-bold">
+              <div className="text-5xl sm:text-6xl lg:text-7xl font-bold">
                 {sprintCompletions.length}
-                <span className="text-2xl opacity-70">/ {profiles.length}</span>
+                <span className="text-xl sm:text-2xl opacity-70">/ {profiles.length}</span>
               </div>
               <div className="text-sm opacity-90 mt-1">marked this sprint done</div>
               <div className="h-2 mt-4 bg-white/20 rounded-full overflow-hidden">

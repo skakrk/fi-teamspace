@@ -184,12 +184,12 @@ export function Leaderboard() {
 
       {/* === HERO STATS BANNER === */}
       {latest && ourStanding && (
-        <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white p-6 shadow-xl shadow-primary/20 relative overflow-hidden">
+        <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white p-5 sm:p-6 shadow-xl shadow-primary/20 relative overflow-hidden">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(circle_at_top_right,white_0%,transparent_60%)]" />
-          <div className="relative grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="relative grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-5 sm:gap-6">
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Our position</div>
-              <div className="text-5xl font-bold mt-1 leading-none">
+              <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none">
                 #{ourStanding.rank}
                 <span className="text-xl opacity-60 ml-1">/ {standings.length}</span>
               </div>
@@ -219,14 +219,14 @@ export function Leaderboard() {
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Score</div>
-              <div className="text-5xl font-bold mt-1 leading-none font-mono">
+              <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none font-mono">
                 {ourStanding.avg_score == null ? '—' : ourStanding.avg_score.toFixed(1)}
               </div>
               <div className="text-xs opacity-70 mt-2">goal: top 2 · 2.0+</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Founders</div>
-              <div className="text-5xl font-bold mt-1 leading-none">
+              <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none">
                 {totalRated}
                 <span className="text-xl opacity-60">/ {totalFounders}</span>
               </div>

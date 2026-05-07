@@ -262,12 +262,12 @@ export function Dashboard() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link to="/dashboard/present">
-            <Button variant="outline">
+            <Button variant="outline" size="sm" className="sm:h-10 sm:px-4">
               <Maximize2 size={16} /> Working Group mode
             </Button>
           </Link>
           <Link to="/dashboard/cohort">
-            <Button>
+            <Button size="sm" className="sm:h-10 sm:px-4">
               <Maximize2 size={16} /> Cohort session mode
             </Button>
           </Link>
