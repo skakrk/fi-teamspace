@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useTeam } from '@/hooks/useTeam';
 import { supabase, type DbPitch, type DbPitchFeedback, type PitchStatus } from '@/lib/supabase';
 import { avg, formatScore } from '@/lib/utils';
-import { Megaphone } from 'lucide-react';
+import { BookOpen, Megaphone } from 'lucide-react';
 
 type LatestByUser = Record<
   string,
@@ -17,6 +17,145 @@ function statusBadge(s: PitchStatus) {
   if (s === 'ready') return <Badge tone="ok">Ready for review</Badge>;
   if (s === 'reviewed') return <Badge tone="primary">Reviewed</Badge>;
   return <Badge tone="neutral">Draft</Badge>;
+}
+
+function HotseatGuide() {
+  return (
+    <details className="bg-surface border border-border rounded-xl shadow-card group">
+      <summary className="cursor-pointer p-5 flex items-center gap-3 list-none [&::-webkit-details-marker]:hidden">
+        <div className="w-10 h-10 rounded-lg bg-bubble text-primary-deep grid place-items-center shrink-0">
+          <BookOpen size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-ink">Hotseat Guide</div>
+          <div className="text-xs text-muted mt-0.5">
+            Format, rating rules, and tips for Feedback Pitches. Click to expand.
+          </div>
+        </div>
+        <span className="text-xs text-muted group-open:hidden">Open</span>
+        <span className="text-xs text-muted hidden group-open:inline">Close</span>
+      </summary>
+
+      <div className="px-5 pb-5 space-y-5 text-sm leading-relaxed text-ink/90">
+        <div className="bg-bubble/30 border border-primary/15 rounded-lg p-3 text-sm">
+          <strong>Format:</strong> rapid-fire pitches in 1, 3 and 5-minute formats to Mentors and
+          Local Leaders. Feedback is prioritised over Q&amp;A. Ratings are 1–5 with{' '}
+          <strong>no &lsquo;3&rsquo;</strong> allowed — average ratings give no actionable signal.
+          All Co-Founders pitch (yes, even technical ones); slightly different versions per
+          person maximise feedback. If a Co-Founder scores below a &lsquo;2&rsquo;, the whole
+          team may be assigned an Epic Sprint.
+        </div>
+
+        <section>
+          <h3 className="font-semibold text-base mb-2">Overview</h3>
+          <p className="text-muted mb-2">
+            Hotseats start with 1-minute pitches without a deck, transition to 3-minute pitches
+            with a deck, and finish with 5-minute deck pitches. You're rated 1–5 and also
+            receive verbal feedback. Founder Institute does not allow &lsquo;3&rsquo; as a
+            rating — an &lsquo;average&rsquo; rating gives no actionable feedback.
+          </p>
+          <p className="text-muted mb-2">
+            Hotseats focus on receiving feedback rather than a traditional Q&amp;A session.
+            Expect tough, blunt and sometimes conflicting feedback on your pitch.
+          </p>
+          <p className="text-muted">
+            You will not pitch every week, but always have your pitch ready — a Director can
+            call on you at any session.
+          </p>
+        </section>
+
+        <section>
+          <h3 className="font-semibold text-base mb-2">When you have Co-Founders</h3>
+          <p className="text-muted">
+            All Co-Founders are expected to pitch during Hotseats and Review Sessions —
+            including technical Co-Founders. You may all give the same pitch, but it's
+            recommended each give slightly different versions to maximise feedback. If a
+            Co-Founder doesn't get a minimum &lsquo;2&rsquo;, the whole team may be assigned
+            an Epic Sprint.
+          </p>
+        </section>
+
+        <section>
+          <h3 className="font-semibold text-base mb-2">1-Minute Hotseat preparation</h3>
+          <p className="text-muted mb-2">
+            Your first pitch is the 1-minute Hotseat — no deck. Convey your business idea and
+            business model succinctly. A minute goes by very quickly: idea-stage Founders tend
+            to ramble and generalise; technical Founders try to cram in too much science and
+            still leave the audience confused.
+          </p>
+          <p className="text-muted mb-2">
+            <strong>One-sentence pitch:</strong> start with the Madlibs format at{' '}
+            <a
+              href="https://fi.co/madlibs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-dark hover:underline"
+            >
+              fi.co/madlibs
+            </a>
+            . It works equally well for idea-stage companies and companies with early revenue.
+            Clarifying problem, audience, and money model in one sentence is harder than it
+            sounds — iterate, get feedback, iterate.
+          </p>
+          <p className="text-muted">
+            <strong>Rating feedback:</strong> don't be discouraged by a 1 or 2 on your first
+            few Hotseats. Listen to the feedback, iterate, and practise — that matters more
+            than the rating right now.
+          </p>
+        </section>
+
+        <section>
+          <h3 className="font-semibold text-base mb-2">Top recommendations &amp; tips</h3>
+          <ul className="space-y-2 list-none">
+            {[
+              ['Be yourself.', 'Project your personality — most new startups reflect their Founders.'],
+              ['Be confident.', 'Stand tall, project confidence, minimise fidgeting and pacing.'],
+              ['Speak clearly.', 'Slowly, audibly, and articulate your name and your business name.'],
+              [
+                "Don't read.",
+                'Never read from notes, phone or laptop. If you believe in your idea, you can explain it without notes.',
+              ],
+              [
+                "Don't use superlatives.",
+                'No "first / fastest / best / revolutionary / huge". Avoid adjectives and buzzwords. Use simple, plain explanations.',
+              ],
+              [
+                'Introduce yourself.',
+                'Briefly cover your background — especially if it relates to the business you\'re presenting.',
+              ],
+              [
+                'Describe your customer.',
+                'Frame the opportunity from the customer\'s perspective: who buys, why they need it, how many of them exist.',
+              ],
+              [
+                'Use data.',
+                'A few select data points showing you understand the market — published research plus original Customer Development insights.',
+              ],
+              [
+                'Be brief.',
+                'End before time is up rather than cramming. Concise points read as organised and efficient.',
+              ],
+              [
+                'End strong.',
+                'Close with an ask — advisor, intro, team member, funding. Repeat company name and tagline so it sticks.',
+              ],
+            ].map(([head, body]) => (
+              <li key={head} className="flex gap-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                <span className="text-muted">
+                  <strong className="text-ink">{head}</strong> {body}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <p className="text-xs text-muted">
+          See the FI Pitching Guidelines support guide for additional tips on pitching.
+        </p>
+      </div>
+    </details>
+  );
 }
 
 export function Pitches() {
@@ -72,6 +211,8 @@ export function Pitches() {
           </p>
         </div>
       </div>
+
+      <HotseatGuide />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {profiles.map((p) => {
