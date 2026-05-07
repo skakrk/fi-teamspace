@@ -364,11 +364,17 @@ export function CohortPresent() {
       pitch: p.project_description,
     }));
 
-  const topSuccesses = weekUpdates
-    .filter((u) => !!u.success)
+  const weekRoundRobin = weekUpdates
+    .filter((u) => u.success || u.challenge || u.learning)
     .map((u) => {
       const profile = profiles.find((p) => p.user_id === u.user_id);
-      return { name: profile?.full_name ?? 'A founder', text: u.success! };
+      return {
+        name: profile?.full_name ?? 'A founder',
+        avatar: profile?.avatar_url ?? null,
+        success: u.success,
+        challenge: u.challenge,
+        learning: u.learning,
+      };
     });
 
   return (
@@ -637,16 +643,41 @@ export function CohortPresent() {
         </section>
         )}
 
-        {/* === WINS THIS WEEK === */}
-        {sprint && sprint.week_number >= 2 && topSuccesses.length > 0 && (
+        {/* === ROUND-ROBIN: 1 SUCCESS / 1 CHALLENGE / 1 LEARNING === */}
+        {sprint && sprint.week_number >= 2 && weekRoundRobin.length > 0 && (
           <section>
-            <div className="text-xs uppercase tracking-wider text-muted mb-4">Wins this week</div>
+            <div className="flex items-end justify-between mb-4">
+              <h2 className="text-2xl font-semibold">This week's reflections</h2>
+              <div className="text-sm text-muted">
+                {weekRoundRobin.length}/{profiles.length} founders submitted
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {topSuccesses.map((s, i) => (
+              {weekRoundRobin.map((r, i) => (
                 <Card key={i} className="bg-bubble/30 border-primary/20">
                   <CardBody>
-                    <div className="text-ok font-bold text-sm mb-1">✓ {s.name}</div>
-                    <div className="text-base">{s.text}</div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Avatar name={r.name} src={r.avatar} size="sm" />
+                      <div className="font-semibold">{r.name}</div>
+                    </div>
+                    <div className="space-y-1.5 text-sm">
+                      {r.success && (
+                        <div>
+                          <span className="text-ok font-bold">✓ Success:</span> {r.success}
+                        </div>
+                      )}
+                      {r.challenge && (
+                        <div>
+                          <span className="text-warn font-bold">! Challenge:</span> {r.challenge}
+                        </div>
+                      )}
+                      {r.learning && (
+                        <div>
+                          <span className="text-primary-deep font-bold">★ Learning:</span>{' '}
+                          {r.learning}
+                        </div>
+                      )}
+                    </div>
                   </CardBody>
                 </Card>
               ))}
