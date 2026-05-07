@@ -173,11 +173,13 @@ export function Meetings() {
     title: string;
     date: string;
     time: string;
+    duration_min: number;
     meet_url: string;
   }>({
     title: 'Cohort Session: ',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '17:00',
+    duration_min: 90,
     meet_url: '',
   });
   // When set, the corresponding dialog is in edit mode and saves run UPDATE.
@@ -232,7 +234,7 @@ export function Meetings() {
     const payload = {
       title: cohortDraft.title,
       scheduled_at,
-      duration_min: 90,
+      duration_min: cohortDraft.duration_min || 90,
       meet_url: cohortDraft.meet_url.trim() || null,
       agenda: null,
       kind: 'cohort_session' as const,
@@ -263,7 +265,13 @@ export function Meetings() {
     const time = format(dt, 'HH:mm');
     setEditingId(m.id);
     if (m.kind === 'cohort_session') {
-      setCohortDraft({ title: m.title, date, time, meet_url: m.meet_url ?? '' });
+      setCohortDraft({
+        title: m.title,
+        date,
+        time,
+        duration_min: m.duration_min || 90,
+        meet_url: m.meet_url ?? '',
+      });
       setCohortOpen(true);
     } else {
       setDraft({
@@ -445,7 +453,7 @@ export function Meetings() {
               placeholder="Cohort Session: topic"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label>Date</Label>
               <Input
@@ -460,6 +468,20 @@ export function Meetings() {
                 type="time"
                 value={cohortDraft.time}
                 onChange={(e) => setCohortDraft({ ...cohortDraft, time: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Duration (min)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={cohortDraft.duration_min}
+                onChange={(e) =>
+                  setCohortDraft({
+                    ...cohortDraft,
+                    duration_min: Number(e.target.value || 0),
+                  })
+                }
               />
             </div>
           </div>
