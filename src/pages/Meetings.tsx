@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Plus, Trash2, Users, Video } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2, Users, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +17,15 @@ function kindLabel(k: MeetingKind) {
   return k === 'cohort_session' ? 'Cohort Session' : 'Working Group';
 }
 
-function MeetingItem({ m, onDelete }: { m: DbMeeting; onDelete: (m: DbMeeting) => void }) {
+function MeetingItem({
+  m,
+  onEdit,
+  onDelete,
+}: {
+  m: DbMeeting;
+  onEdit: (m: DbMeeting) => void;
+  onDelete: (m: DbMeeting) => void;
+}) {
   const dt = new Date(m.scheduled_at);
   const isCohort = m.kind === 'cohort_session';
   return (
@@ -76,6 +84,14 @@ function MeetingItem({ m, onDelete }: { m: DbMeeting; onDelete: (m: DbMeeting) =
             <Button
               size="sm"
               variant="ghost"
+              onClick={() => onEdit(m)}
+              title="Edit meeting"
+            >
+              <Pencil size={14} />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => onDelete(m)}
               title="Delete meeting"
             >
@@ -122,6 +138,8 @@ export function Meetings() {
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '17:00',
   });
+  // When set, the corresponding dialog is in edit mode and saves run UPDATE.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function reload() {
@@ -138,48 +156,85 @@ export function Meetings() {
   const upcoming = meetings.filter((m) => new Date(m.scheduled_at).getTime() >= now - 60 * 60 * 1000);
   const past = meetings.filter((m) => new Date(m.scheduled_at).getTime() < now - 60 * 60 * 1000);
 
-  async function create() {
+  async function saveWorkingGroup() {
     setSaving(true);
     const scheduled_at = new Date(`${draft.date}T${draft.time}:00`).toISOString();
-    const { error } = await supabase.from('meetings').insert({
+    const payload = {
       title: draft.title,
       scheduled_at,
       duration_min: draft.duration_min,
       meet_url: draft.meet_url || null,
       agenda: draft.agenda || null,
-      status: 'upcoming',
       kind: draft.kind,
-      created_by: user?.id ?? null,
-    });
+    };
+    const { error } = editingId
+      ? await supabase.from('meetings').update(payload).eq('id', editingId)
+      : await supabase.from('meetings').insert({
+          ...payload,
+          status: 'upcoming',
+          created_by: user?.id ?? null,
+        });
     setSaving(false);
     if (error) {
-      notifyError('Could not create meeting', error);
+      notifyError(editingId ? 'Could not update meeting' : 'Could not create meeting', error);
       return;
     }
     setOpen(false);
+    setEditingId(null);
     await reload();
   }
 
-  async function createCohortSession() {
+  async function saveCohortSession() {
     setSaving(true);
     const scheduled_at = new Date(`${cohortDraft.date}T${cohortDraft.time}:00`).toISOString();
-    const { error } = await supabase.from('meetings').insert({
+    const payload = {
       title: cohortDraft.title,
       scheduled_at,
       duration_min: 90,
       meet_url: null,
       agenda: null,
-      status: 'upcoming',
-      kind: 'cohort_session',
-      created_by: user?.id ?? null,
-    });
+      kind: 'cohort_session' as const,
+    };
+    const { error } = editingId
+      ? await supabase.from('meetings').update(payload).eq('id', editingId)
+      : await supabase.from('meetings').insert({
+          ...payload,
+          status: 'upcoming',
+          created_by: user?.id ?? null,
+        });
     setSaving(false);
     if (error) {
-      notifyError('Could not create cohort session', error);
+      notifyError(
+        editingId ? 'Could not update cohort session' : 'Could not create cohort session',
+        error,
+      );
       return;
     }
     setCohortOpen(false);
+    setEditingId(null);
     await reload();
+  }
+
+  function startEdit(m: DbMeeting) {
+    const dt = new Date(m.scheduled_at);
+    const date = format(dt, 'yyyy-MM-dd');
+    const time = format(dt, 'HH:mm');
+    setEditingId(m.id);
+    if (m.kind === 'cohort_session') {
+      setCohortDraft({ title: m.title, date, time });
+      setCohortOpen(true);
+    } else {
+      setDraft({
+        kind: m.kind,
+        title: m.title,
+        date,
+        time,
+        duration_min: m.duration_min,
+        meet_url: m.meet_url ?? '',
+        agenda: m.agenda ?? '',
+      });
+      setOpen(true);
+    }
   }
 
   async function deleteMeeting(m: DbMeeting) {
@@ -223,13 +278,13 @@ export function Meetings() {
         </TabsList>
         <TabsContent value="upcoming" className="mt-4 space-y-3">
           {upcoming.map((m) => (
-            <MeetingItem key={m.id} m={m} onDelete={deleteMeeting} />
+            <MeetingItem key={m.id} m={m} onEdit={startEdit} onDelete={deleteMeeting} />
           ))}
           {!upcoming.length && <div className="text-muted text-sm">No upcoming meetings.</div>}
         </TabsContent>
         <TabsContent value="past" className="mt-4 space-y-3">
           {past.map((m) => (
-            <MeetingItem key={m.id} m={m} onDelete={deleteMeeting} />
+            <MeetingItem key={m.id} m={m} onEdit={startEdit} onDelete={deleteMeeting} />
           ))}
           {!past.length && <div className="text-muted text-sm">No past meetings yet.</div>}
         </TabsContent>
@@ -237,17 +292,26 @@ export function Meetings() {
 
       <Dialog
         open={open}
-        onOpenChange={setOpen}
-        title="New meeting"
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setEditingId(null);
+        }}
+        title={editingId ? 'Edit meeting' : 'New meeting'}
         description="Schedule a Working Group session."
         size="lg"
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                setEditingId(null);
+              }}
+            >
               Cancel
             </Button>
-            <Button disabled={saving} onClick={create}>
-              {saving ? 'Saving…' : 'Create'}
+            <Button disabled={saving} onClick={saveWorkingGroup}>
+              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Create'}
             </Button>
           </>
         }
@@ -306,17 +370,26 @@ export function Meetings() {
 
       <Dialog
         open={cohortOpen}
-        onOpenChange={setCohortOpen}
-        title="New cohort session"
+        onOpenChange={(v) => {
+          setCohortOpen(v);
+          if (!v) setEditingId(null);
+        }}
+        title={editingId ? 'Edit cohort session' : 'New cohort session'}
         description="Founder Institute cohort session — we don't run it, just record when it happens."
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setCohortOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCohortOpen(false);
+                setEditingId(null);
+              }}
+            >
               Cancel
             </Button>
-            <Button disabled={saving} onClick={createCohortSession}>
-              {saving ? 'Saving…' : 'Create'}
+            <Button disabled={saving} onClick={saveCohortSession}>
+              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Create'}
             </Button>
           </>
         }

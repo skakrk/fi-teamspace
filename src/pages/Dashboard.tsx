@@ -77,23 +77,38 @@ function useDashboardData() {
   useEffect(() => {
     (async () => {
       const now = new Date();
+      const nowIso = now.toISOString();
 
       // Fire all independent queries in parallel; isolate failures so one bad
       // table can't block the whole dashboard.
       const [
-        meetings,
+        upcomingMeetings,
+        pastMeetings,
         currentSprintRows,
         anySprintRows,
         allPitches,
         openPolls,
         cohortRows,
       ] = await Promise.all([
-        safeQuery<DbMeeting>('meetings', () =>
+        // Next upcoming Working Group meeting.
+        safeQuery<DbMeeting>('meetings/upcoming', () =>
           supabase
             .from('meetings')
             .select('*')
-            .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
+            .eq('kind', 'working_group')
+            .gte('scheduled_at', nowIso)
             .order('scheduled_at', { ascending: true })
+            .limit(1),
+        ),
+        // Most recent past Working Group meeting (so reflections filled after
+        // the meeting still show up on the dashboard).
+        safeQuery<DbMeeting>('meetings/past', () =>
+          supabase
+            .from('meetings')
+            .select('*')
+            .eq('kind', 'working_group')
+            .lt('scheduled_at', nowIso)
+            .order('scheduled_at', { ascending: false })
             .limit(1),
         ),
         safeQuery<DbSprint>('sprints/current', () =>
@@ -122,7 +137,16 @@ function useDashboardData() {
         ),
       ]);
 
-      const meeting = meetings[0] ?? null;
+      // Pick the meeting most relevant for this week's reflections.
+      // Prefer a recent past meeting (within 7 days) so post-meeting reflections
+      // keep showing until the next session approaches; otherwise fall back to
+      // the next upcoming meeting (or whichever is non-null).
+      const upcoming = upcomingMeetings[0] ?? null;
+      const past = pastMeetings[0] ?? null;
+      const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+      const pastIsRecent =
+        past && now.getTime() - new Date(past.scheduled_at).getTime() <= SEVEN_DAYS;
+      const meeting = pastIsRecent ? past : upcoming ?? past;
       const sprint = currentSprintRows[0] ?? anySprintRows[0] ?? null;
 
       let tasks: DbSprintTask[] = [];
