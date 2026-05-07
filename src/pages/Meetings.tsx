@@ -112,6 +112,16 @@ export function Meetings() {
     meet_url: '',
     agenda: WG_AGENDA,
   });
+  const [cohortOpen, setCohortOpen] = useState(false);
+  const [cohortDraft, setCohortDraft] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  }>({
+    title: 'Cohort Session: ',
+    date: format(new Date(), 'yyyy-MM-dd'),
+    time: '17:00',
+  });
   const [saving, setSaving] = useState(false);
 
   async function reload() {
@@ -150,6 +160,28 @@ export function Meetings() {
     await reload();
   }
 
+  async function createCohortSession() {
+    setSaving(true);
+    const scheduled_at = new Date(`${cohortDraft.date}T${cohortDraft.time}:00`).toISOString();
+    const { error } = await supabase.from('meetings').insert({
+      title: cohortDraft.title,
+      scheduled_at,
+      duration_min: 90,
+      meet_url: null,
+      agenda: null,
+      status: 'upcoming',
+      kind: 'cohort_session',
+      created_by: user?.id ?? null,
+    });
+    setSaving(false);
+    if (error) {
+      notifyError('Could not create cohort session', error);
+      return;
+    }
+    setCohortOpen(false);
+    await reload();
+  }
+
   async function deleteMeeting(m: DbMeeting) {
     if (
       !confirm(
@@ -174,9 +206,14 @@ export function Meetings() {
           <h1 className="h1">Meetings</h1>
           <p className="muted text-sm mt-1">Working Group sessions, agendas and minutes.</p>
         </div>
-        <Button onClick={() => setOpen(true)}>
-          <Plus size={16} /> New meeting
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setCohortOpen(true)}>
+            <Users size={16} /> Cohort session
+          </Button>
+          <Button onClick={() => setOpen(true)}>
+            <Plus size={16} /> New meeting
+          </Button>
+        </div>
       </div>
 
       <TabsRoot defaultValue="upcoming">
@@ -263,6 +300,53 @@ export function Meetings() {
               value={draft.agenda}
               onChange={(e) => setDraft({ ...draft, agenda: e.target.value })}
             />
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={cohortOpen}
+        onOpenChange={setCohortOpen}
+        title="New cohort session"
+        description="Founder Institute cohort session — we don't run it, just record when it happens."
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCohortOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={saving} onClick={createCohortSession}>
+              {saving ? 'Saving…' : 'Create'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <Label>Title</Label>
+            <Input
+              value={cohortDraft.title}
+              onChange={(e) => setCohortDraft({ ...cohortDraft, title: e.target.value })}
+              placeholder="Cohort Session: topic"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={cohortDraft.date}
+                onChange={(e) => setCohortDraft({ ...cohortDraft, date: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Time</Label>
+              <Input
+                type="time"
+                value={cohortDraft.time}
+                onChange={(e) => setCohortDraft({ ...cohortDraft, time: e.target.value })}
+              />
+            </div>
           </div>
         </div>
       </Dialog>
