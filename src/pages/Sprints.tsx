@@ -308,7 +308,7 @@ export function Sprints() {
                   <tbody>
                     {tasks.map((t) => (
                       <tr key={t.id} className="border-t border-border">
-                        <td className="px-3 py-2 align-top w-72">
+                        <td className="px-3 py-2 align-top w-44 sm:w-72">
                           <div className="font-medium text-sm">{t.title}</div>
                           {t.description && (
                             <div className="text-xs text-muted mt-0.5">{t.description}</div>
@@ -402,7 +402,7 @@ export function Sprints() {
               placeholder="Sprint 2: Customer Discovery"
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label>Week #</Label>
               <Input
