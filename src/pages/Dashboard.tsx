@@ -2,16 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { safeFormat, safeDistance } from '@/lib/utils';
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { Download, ChevronRight, Maximize2, Video } from 'lucide-react';
+import { Download, ChevronRight, Maximize2, Minus, TrendingDown, TrendingUp, Video } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -32,10 +23,9 @@ import {
 import {
   computeStandings,
   latestSnapshotDate,
-  ourTeamHistory,
   rowsForDate,
 } from '@/lib/standings';
-import { LayoutDashboard, Megaphone, CalendarClock, Trophy, Crown } from 'lucide-react';
+import { LayoutDashboard, Megaphone, CalendarClock, Crown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
 
@@ -192,64 +182,98 @@ function useDashboardData() {
 }
 
 function LeaderboardBanner({ rows }: { rows: DbCohortRating[] }) {
-  const ourSeries = ourTeamHistory(rows, OUR_TEAM).map((h) => ({
-    date: safeFormat(h.date, 'MMM d', ''),
-    score: h.score,
-  }));
   const latestDate = latestSnapshotDate(rows);
   const standings = latestDate ? computeStandings(rowsForDate(rows, latestDate)) : [];
-  const ours = standings.find((s) => s.team_name === OUR_TEAM) ?? null;
-  const total = standings.length;
+  const ourStanding = standings.find((s) => s.team_name === OUR_TEAM) ?? null;
+  const totalFounders = standings.reduce((sum, s) => sum + s.members.length, 0);
+  const totalRated = standings.reduce(
+    (sum, s) => sum + s.members.filter((m) => m.score != null).length,
+    0,
+  );
+  const allDates = Array.from(new Set(rows.map((r) => r.recorded_at))).sort();
+  const previousDate = allDates.length >= 2 ? allDates[allDates.length - 2] : null;
+  const previousStandings = previousDate
+    ? computeStandings(rowsForDate(rows, previousDate))
+    : [];
+  const trend = (() => {
+    const cur = ourStanding;
+    const prev = previousStandings.find((s) => s.team_name === OUR_TEAM);
+    if (!cur || !prev) return null as 'up' | 'down' | 'flat' | null;
+    if (cur.rank < prev.rank) return 'up' as const;
+    if (cur.rank > prev.rank) return 'down' as const;
+    return 'flat' as const;
+  })();
+
+  if (!latestDate || !ourStanding) {
+    return (
+      <Card>
+        <CardBody className="flex items-center justify-between gap-4">
+          <div className="text-sm text-muted">No leaderboard snapshot yet.</div>
+          <Link to="/leaderboard">
+            <Button variant="outline" size="sm">
+              Open leaderboard <ChevronRight size={14} />
+            </Button>
+          </Link>
+        </CardBody>
+      </Card>
+    );
+  }
 
   return (
-    <Card>
-      <CardBody className="flex flex-col md:flex-row items-stretch gap-4">
-        <div className="flex-1 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-bubble text-primary-deep grid place-items-center">
-            <Trophy size={22} />
-          </div>
+    <Link to="/leaderboard" className="block group">
+      <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white p-5 sm:p-6 shadow-xl shadow-primary/20 relative overflow-hidden transition-shadow group-hover:shadow-2xl">
+        <div className="absolute inset-0 opacity-15 bg-[radial-gradient(circle_at_top_right,white_0%,transparent_60%)]" />
+        <div className="relative grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-5 sm:gap-6">
           <div>
-            <div className="text-xs text-muted">FI Standing</div>
-            <div className="text-2xl font-semibold">
-              {ours ? <>#{ours.rank ?? '?'} of {total}</> : 'No data yet'}
+            <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Our position</div>
+            <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none">
+              #{ourStanding.rank}
+              <span className="text-xl opacity-60 ml-1">/ {standings.length}</span>
             </div>
-            {ours && (
-              <div className="text-sm text-muted">
-                Score{' '}
-                <span className="font-mono">
-                  {ours.avg_score == null ? '—' : ours.avg_score.toFixed(1)}
-                </span>{' '}
-                · goal: top 2
+            {trend && (
+              <div className="text-xs mt-2 inline-flex items-center gap-1 opacity-90">
+                {trend === 'up' && (
+                  <>
+                    <TrendingUp size={12} /> moved up vs last snapshot
+                  </>
+                )}
+                {trend === 'down' && (
+                  <>
+                    <TrendingDown size={12} /> moved down vs last snapshot
+                  </>
+                )}
+                {trend === 'flat' && (
+                  <>
+                    <Minus size={12} /> same as last snapshot
+                  </>
+                )}
               </div>
             )}
           </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Score</div>
+            <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none font-mono">
+              {ourStanding.avg_score == null ? '—' : ourStanding.avg_score.toFixed(1)}
+            </div>
+            <div className="text-xs opacity-70 mt-2">goal: top 2 · 2.0+</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Founders</div>
+            <div className="text-4xl sm:text-5xl font-bold mt-1 leading-none">
+              {totalRated}
+              <span className="text-xl opacity-60">/ {totalFounders}</span>
+            </div>
+            <div className="text-xs opacity-70 mt-2">rated cohort-wide</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] opacity-70">Snapshot</div>
+            <div className="text-base font-semibold mt-2">
+              {safeFormat(latestDate, 'MMM d, yyyy')}
+            </div>
+          </div>
         </div>
-        <div className="flex-1 min-h-[100px]">
-          <ResponsiveContainer width="100%" height={100}>
-            <LineChart data={ourSeries} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#f1f1f1" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} hide={ourSeries.length < 2} />
-              <YAxis domain={[0, 5]} tick={{ fontSize: 10 }} width={20} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="score"
-                stroke="#128C7E"
-                strokeWidth={2}
-                dot={{ r: 3, fill: '#25D366' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex md:flex-col gap-2 justify-end items-end">
-          <Link to="/leaderboard">
-            <Button variant="outline" size="sm">
-              Open <ChevronRight size={14} />
-            </Button>
-          </Link>
-        </div>
-      </CardBody>
-    </Card>
+      </div>
+    </Link>
   );
 }
 

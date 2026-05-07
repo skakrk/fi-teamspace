@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Pencil, Plus, Trash2, Users, Video } from 'lucide-react';
+import { Download, MessageCircle, Pencil, Plus, Trash2, Users, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,36 @@ import { useAuth } from '@/hooks/useAuth';
 
 function kindLabel(k: MeetingKind) {
   return k === 'cohort_session' ? 'Cohort Session' : 'Working Group';
+}
+
+function isMeetingPast(m: DbMeeting): boolean {
+  const startMs = new Date(m.scheduled_at).getTime();
+  const endMs = startMs + (m.duration_min || 0) * 60 * 1000;
+  return Number.isFinite(endMs) && endMs < Date.now();
+}
+
+function buildMeetingShareText(m: DbMeeting): string {
+  const dt = new Date(m.scheduled_at);
+  const lines: string[] = [];
+  lines.push(`📅 ${m.title}`);
+  lines.push(`${kindLabel(m.kind)}`);
+  lines.push('');
+  lines.push(`🕒 ${format(dt, 'EEEE, MMMM d · HH:mm')} (${m.duration_min} min)`);
+  if (m.meet_url) {
+    lines.push(`🔗 ${m.meet_url}`);
+  }
+  if (m.agenda) {
+    lines.push('');
+    lines.push('Agenda:');
+    lines.push(m.agenda);
+  }
+  return lines.join('\n');
+}
+
+function shareToWhatsApp(m: DbMeeting) {
+  const text = buildMeetingShareText(m);
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function MeetingItem({
@@ -64,8 +94,10 @@ function MeetingItem({
           )}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Badge tone={m.status === 'upcoming' ? 'ok' : 'neutral'}>{m.status}</Badge>
-          <div className="flex gap-2">
+          <Badge tone={isMeetingPast(m) ? 'neutral' : 'ok'}>
+            {isMeetingPast(m) ? 'past' : 'upcoming'}
+          </Badge>
+          <div className="flex gap-2 flex-wrap justify-end">
             {m.meet_url && (
               <a href={m.meet_url} target="_blank" rel="noreferrer">
                 <Button size="sm" variant="primary">
@@ -80,6 +112,14 @@ function MeetingItem({
               title="Download .ics file"
             >
               <Download size={14} /> Calendar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => shareToWhatsApp(m)}
+              title="Share to WhatsApp"
+            >
+              <MessageCircle size={14} className="text-[#25D366]" /> WhatsApp
             </Button>
             <Button
               size="sm"
