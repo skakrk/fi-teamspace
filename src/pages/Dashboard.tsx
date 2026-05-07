@@ -689,8 +689,23 @@ export function DashboardPresent() {
     }
   }
 
-  const latestDate = latestSnapshotDate(cohort);
-  const standings = latestDate ? computeStandings(rowsForDate(cohort, latestDate)) : [];
+  // Pick the cohort_ratings snapshot most relevant for the selected week.
+  // Prefer a snapshot whose recorded_at falls inside [start_date, end_date];
+  // if there are several in the range, take the latest. Otherwise fall back
+  // to the most recent snapshot recorded ON OR BEFORE the week's end so the
+  // panel reflects what was known by the end of that week.
+  const snapshotDate = (() => {
+    if (!sprint) return latestSnapshotDate(cohort);
+    const dates = Array.from(new Set(cohort.map((r) => r.recorded_at))).sort();
+    const inRange = dates.filter(
+      (d) => d >= sprint.start_date && d <= sprint.end_date,
+    );
+    if (inRange.length) return inRange[inRange.length - 1];
+    const onOrBefore = dates.filter((d) => d <= sprint.end_date);
+    if (onOrBefore.length) return onOrBefore[onOrBefore.length - 1];
+    return latestSnapshotDate(cohort);
+  })();
+  const standings = snapshotDate ? computeStandings(rowsForDate(cohort, snapshotDate)) : [];
 
   const sprintStats = (() => {
     if (!tasks.length || !profiles.length) return { pct: 0, done: 0, total: 0 };
@@ -979,8 +994,15 @@ export function DashboardPresent() {
         {/* === 5. LEADERBOARD (background context, last) === */}
         {sprint && sprint.week_number >= 2 && (
         <section className="pt-4 border-t border-border">
-          <div className="text-xs uppercase tracking-wider text-muted mb-3">
-            FI Cohort Leaderboard · context
+          <div className="flex items-end justify-between mb-3">
+            <div className="text-xs uppercase tracking-wider text-muted">
+              FI Cohort Leaderboard · context
+            </div>
+            {snapshotDate && (
+              <div className="text-xs text-muted">
+                Snapshot {safeFormat(snapshotDate, 'MMM d, yyyy')}
+              </div>
+            )}
           </div>
           <div className="bg-bg rounded-2xl p-4 space-y-1.5">
             {standings.map((s) => {
