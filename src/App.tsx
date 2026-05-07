@@ -20,6 +20,7 @@ import { Leaderboard } from '@/pages/Leaderboard';
 import { Resources } from '@/pages/Resources';
 import { CourseProgress } from '@/pages/CourseProgress';
 import { CohortPresent } from '@/pages/CohortPresent';
+import { SharePresent } from '@/pages/SharePresent';
 import { Admin } from '@/pages/Admin';
 import { ConfigBanner } from '@/components/shared/ConfigBanner';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -50,6 +51,7 @@ export function App() {
         <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/security" element={<Security />} />
         <Route path="/guide" element={<UserGuide />} />
+        <Route path="/share/cohort/:token" element={<SharePresent />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -60,6 +62,7 @@ export function App() {
       <Route path="/auth/reset" element={<ResetPassword />} />
       <Route path="/security" element={<Security />} />
       <Route path="/guide" element={<UserGuide />} />
+      <Route path="/share/cohort/:token" element={<SharePresent />} />
       <Route
         path="/dashboard/present"
         element={
