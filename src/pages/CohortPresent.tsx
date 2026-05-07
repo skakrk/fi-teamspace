@@ -435,6 +435,7 @@ export function CohortPresent() {
         </section>
 
         {/* === WORKING GROUP RESULTS (this week) === */}
+        {sprint && sprint.week_number >= 2 && (
         <section>
           <div className="text-xs uppercase tracking-wider text-muted mb-4">
             Working group results &amp; reports
@@ -517,9 +518,10 @@ export function CohortPresent() {
             </div>
           )}
         </section>
+        )}
 
         {/* === WINS THIS WEEK === */}
-        {topSuccesses.length > 0 && (
+        {sprint && sprint.week_number >= 2 && topSuccesses.length > 0 && (
           <section>
             <div className="text-xs uppercase tracking-wider text-muted mb-4">Wins this week</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -536,6 +538,7 @@ export function CohortPresent() {
         )}
 
         {/* === PITCH HIGHLIGHTS === */}
+        {sprint && sprint.week_number >= 2 && (
         <section>
           <div className="text-xs uppercase tracking-wider text-muted mb-4">Feedback Pitches</div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -568,6 +571,7 @@ export function CohortPresent() {
             })}
           </div>
         </section>
+        )}
 
         {/* === ASKS === */}
         <section>

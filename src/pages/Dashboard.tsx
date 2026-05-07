@@ -865,6 +865,7 @@ export function DashboardPresent() {
         </section>
 
         {/* === 2. ROUND-ROBIN — primary block === */}
+        {sprint && sprint.week_number >= 2 && (
         <section>
           <div className="flex items-end justify-between mb-3">
             <div>
@@ -924,8 +925,10 @@ export function DashboardPresent() {
             })}
           </div>
         </section>
+        )}
 
         {/* === 4. PITCH READINESS === */}
+        {sprint && sprint.week_number >= 2 && (
         <section>
           <div className="flex items-end justify-between mb-3">
             <div>
@@ -971,8 +974,10 @@ export function DashboardPresent() {
             })}
           </div>
         </section>
+        )}
 
         {/* === 5. LEADERBOARD (background context, last) === */}
+        {sprint && sprint.week_number >= 2 && (
         <section className="pt-4 border-t border-border">
           <div className="text-xs uppercase tracking-wider text-muted mb-3">
             FI Cohort Leaderboard · context
@@ -1004,6 +1009,7 @@ export function DashboardPresent() {
             )}
           </div>
         </section>
+        )}
 
         {/* === FOOTER === */}
         <div className="flex items-center justify-between pt-6 border-t border-border">
