@@ -245,8 +245,22 @@ export function CohortPresent() {
     return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
   })();
 
-  const latestDate = latestSnapshotDate(cohort);
-  const standings = latestDate ? computeStandings(rowsForDate(cohort, latestDate)) : [];
+  // Pick the cohort_ratings snapshot most relevant for the selected week.
+  // Prefer one whose recorded_at sits inside [start_date, end_date]; otherwise
+  // fall back to the most recent snapshot ON OR BEFORE the week's end so the
+  // header shows what was true by the end of that week.
+  const snapshotDate = (() => {
+    if (!sprint) return latestSnapshotDate(cohort);
+    const dates = Array.from(new Set(cohort.map((r) => r.recorded_at))).sort();
+    const inRange = dates.filter(
+      (d) => d >= sprint.start_date && d <= sprint.end_date,
+    );
+    if (inRange.length) return inRange[inRange.length - 1];
+    const onOrBefore = dates.filter((d) => d <= sprint.end_date);
+    if (onOrBefore.length) return onOrBefore[onOrBefore.length - 1];
+    return latestSnapshotDate(cohort);
+  })();
+  const standings = snapshotDate ? computeStandings(rowsForDate(cohort, snapshotDate)) : [];
   const ourStanding = standings.find((s) => s.team_name === OUR_TEAM);
 
   const projects = profiles
