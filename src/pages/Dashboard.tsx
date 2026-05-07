@@ -537,7 +537,7 @@ export function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Round-robin from latest meeting</CardTitle>
+          <CardTitle>Team reflections — successes, challenges &amp; learnings</CardTitle>
         </CardHeader>
         <CardBody>
           {!profiles.length ? (
