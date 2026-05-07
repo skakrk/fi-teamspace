@@ -601,6 +601,7 @@ export function DashboardPresent() {
   const [selectedTasks, setSelectedTasks] = useState<DbSprintTask[]>([]);
   const [selectedProgress, setSelectedProgress] = useState<DbTaskProgress[]>([]);
   const [selectedCompletions, setSelectedCompletions] = useState<{ user_id: string }[]>([]);
+  const [weekUpdates, setWeekUpdates] = useState<DbMeetingUpdate[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -624,12 +625,23 @@ export function DashboardPresent() {
         setSelectedTasks([]);
         setSelectedProgress([]);
         setSelectedCompletions([]);
+        setWeekUpdates([]);
         return;
       }
-      const { data: t } = await supabase
-        .from('sprint_tasks')
-        .select('*')
-        .eq('sprint_id', selectedSprintId);
+      const sprint = allSprints.find((s) => s.id === selectedSprintId);
+      const [{ data: t }, { data: c }, weekMeetingRows] = await Promise.all([
+        supabase.from('sprint_tasks').select('*').eq('sprint_id', selectedSprintId),
+        supabase.from('sprint_completions').select('user_id').eq('sprint_id', selectedSprintId),
+        sprint
+          ? supabase
+              .from('meetings')
+              .select('id')
+              .eq('kind', 'working_group')
+              .gte('scheduled_at', `${sprint.start_date}T00:00:00.000Z`)
+              .lte('scheduled_at', `${sprint.end_date}T23:59:59.999Z`)
+              .order('scheduled_at', { ascending: false })
+          : Promise.resolve({ data: [] as { id: string }[] } as { data: { id: string }[] }),
+      ]);
       const taskList = (t as DbSprintTask[]) || [];
       setSelectedTasks(taskList);
       if (taskList.length) {
@@ -641,17 +653,29 @@ export function DashboardPresent() {
       } else {
         setSelectedProgress([]);
       }
-      const { data: c } = await supabase
-        .from('sprint_completions')
-        .select('user_id')
-        .eq('sprint_id', selectedSprintId);
       setSelectedCompletions((c as { user_id: string }[]) || []);
+
+      // Pull reflections from any Working Group meeting that fell inside the
+      // selected sprint week, so the "This week's reflections" panel matches
+      // whichever week the presenter has opened.
+      const meetingIds = ((weekMeetingRows.data as { id: string }[] | null) || []).map(
+        (m) => m.id,
+      );
+      if (meetingIds.length) {
+        const { data: u } = await supabase
+          .from('meeting_updates')
+          .select('*')
+          .in('meeting_id', meetingIds);
+        setWeekUpdates((u as DbMeetingUpdate[]) || []);
+      } else {
+        setWeekUpdates([]);
+      }
     })();
-  }, [selectedSprintId]);
+  }, [selectedSprintId, allSprints]);
 
   if (!data) return <div className="min-h-screen grid place-items-center">Loading…</div>;
 
-  const { allPitches, meetingUpdates, cohort } = data;
+  const { allPitches, cohort } = data;
   const sprint = allSprints.find((s) => s.id === selectedSprintId) ?? null;
   const tasks = selectedTasks;
   const progress = selectedProgress;
@@ -675,9 +699,30 @@ export function DashboardPresent() {
     return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
   })();
 
+  // Roll multiple meeting_updates for the same founder in the same week
+  // (e.g. two WG meetings in one sprint) into one merged record by preferring
+  // the most-filled / latest values per field.
+  const updatesByUser = new Map<string, DbMeetingUpdate>();
+  for (const u of weekUpdates) {
+    const existing = updatesByUser.get(u.user_id);
+    if (!existing) {
+      updatesByUser.set(u.user_id, u);
+      continue;
+    }
+    updatesByUser.set(u.user_id, {
+      ...existing,
+      success: u.success ?? existing.success,
+      challenge: u.challenge ?? existing.challenge,
+      learning: u.learning ?? existing.learning,
+      updated_at:
+        new Date(u.updated_at) > new Date(existing.updated_at)
+          ? u.updated_at
+          : existing.updated_at,
+    });
+  }
   const founderUpdates = profiles.map((p) => ({
     profile: p,
-    update: meetingUpdates.find((u) => u.user_id === p.user_id),
+    update: updatesByUser.get(p.user_id),
   }));
   const filledCount = founderUpdates.filter(
     (f) => f.update && (f.update.success || f.update.challenge || f.update.learning),
