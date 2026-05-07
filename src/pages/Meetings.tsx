@@ -133,10 +133,12 @@ export function Meetings() {
     title: string;
     date: string;
     time: string;
+    meet_url: string;
   }>({
     title: 'Cohort Session: ',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '17:00',
+    meet_url: '',
   });
   // When set, the corresponding dialog is in edit mode and saves run UPDATE.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -191,7 +193,7 @@ export function Meetings() {
       title: cohortDraft.title,
       scheduled_at,
       duration_min: 90,
-      meet_url: null,
+      meet_url: cohortDraft.meet_url.trim() || null,
       agenda: null,
       kind: 'cohort_session' as const,
     };
@@ -221,7 +223,7 @@ export function Meetings() {
     const time = format(dt, 'HH:mm');
     setEditingId(m.id);
     if (m.kind === 'cohort_session') {
-      setCohortDraft({ title: m.title, date, time });
+      setCohortDraft({ title: m.title, date, time, meet_url: m.meet_url ?? '' });
       setCohortOpen(true);
     } else {
       setDraft({
@@ -420,6 +422,14 @@ export function Meetings() {
                 onChange={(e) => setCohortDraft({ ...cohortDraft, time: e.target.value })}
               />
             </div>
+          </div>
+          <div>
+            <Label>Zoom link</Label>
+            <Input
+              value={cohortDraft.meet_url}
+              onChange={(e) => setCohortDraft({ ...cohortDraft, meet_url: e.target.value })}
+              placeholder="https://zoom.us/j/…"
+            />
           </div>
         </div>
       </Dialog>

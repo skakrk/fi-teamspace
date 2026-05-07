@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
+import { Check, Link2, Video } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTeam } from '@/hooks/useTeam';
@@ -42,48 +42,30 @@ type AttendanceRow = { meeting_id: string; user_id: string; status: 'present' | 
 
 type Bundle = {
   vision: DbTeamVision | null;
-  sprint: DbSprint | null;
-  tasks: DbSprintTask[];
-  progress: DbTaskProgress[];
   cohort: DbCohortRating[];
   pitches: DbPitch[];
   feedbacks: DbPitchFeedback[];
-  updates: DbMeetingUpdate[];
-  recentMeetings: DbMeeting[];
+  cohortSessions: DbMeeting[];
+  workingGroups: DbMeeting[];
   notesByMeeting: Record<string, DbMeetingNotes>;
   attendanceByMeeting: Record<string, AttendanceRow[]>;
-  sprintCompletions: DbSprintCompletion[];
+  updatesByMeeting: Record<string, DbMeetingUpdate[]>;
+};
+
+type WeekData = {
+  sprint: DbSprint;
+  tasks: DbSprintTask[];
+  progress: DbTaskProgress[];
+  completions: DbSprintCompletion[];
 };
 
 export function CohortPresent() {
   const { profiles } = useTeam();
   const [data, setData] = useState<Bundle | null>(null);
+  const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [copied, setCopied] = useState(false);
-  const [cohortSessions, setCohortSessions] = useState<DbMeeting[]>([]);
-  const [cohortIdx, setCohortIdx] = useState(0); // 0 = newest
-
-  // Load cohort sessions list (sorted newest first) and pick a sensible default.
-  useEffect(() => {
-    (async () => {
-      const { data: rows } = await supabase
-        .from('meetings')
-        .select('*')
-        .eq('kind', 'cohort_session')
-        .order('scheduled_at', { ascending: false });
-      const list = (rows as DbMeeting[]) || [];
-      setCohortSessions(list);
-      if (list.length) {
-        const nowIso = new Date().toISOString();
-        // Default: most recent past session, otherwise the oldest upcoming one.
-        const pastIdx = list.findIndex((m) => m.scheduled_at <= nowIso);
-        setCohortIdx(pastIdx === -1 ? list.length - 1 : pastIdx);
-      }
-    })();
-  }, []);
-
-  const selectedCohort = cohortSessions[cohortIdx] ?? null;
-  const hasNewer = cohortIdx > 0;
-  const hasOlder = cohortIdx < cohortSessions.length - 1;
 
   async function copyShareLink() {
     const url = window.location.href;
@@ -92,7 +74,6 @@ export function CohortPresent() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for browsers without clipboard API
       const ta = document.createElement('textarea');
       ta.value = url;
       ta.style.position = 'fixed';
@@ -110,104 +91,114 @@ export function CohortPresent() {
     }
   }
 
+  // Load global, week-independent data + all sprints + cohort/working-group meetings.
   useEffect(() => {
     (async () => {
       const [
         { data: vision },
-        { data: sprintCur },
-        { data: sprintAny },
         { data: cohort },
         { data: pitches },
         { data: feedbacks },
+        { data: sprints },
+        { data: cohortSessRows },
+        { data: wgRows },
       ] = await Promise.all([
         supabase.from('team_vision').select('*').eq('id', 1).maybeSingle(),
-        supabase.from('sprints').select('*').eq('is_current', true).limit(1),
-        supabase.from('sprints').select('*').order('week_number', { ascending: false }).limit(1),
         supabase.from('cohort_ratings').select('*').order('recorded_at', { ascending: false }),
         supabase.from('pitches').select('*').order('version', { ascending: false }),
         supabase.from('pitch_feedback').select('*'),
+        supabase.from('sprints').select('*').order('week_number', { ascending: true }),
+        supabase
+          .from('meetings')
+          .select('*')
+          .eq('kind', 'cohort_session')
+          .order('scheduled_at', { ascending: true }),
+        supabase
+          .from('meetings')
+          .select('*')
+          .eq('kind', 'working_group')
+          .order('scheduled_at', { ascending: false }),
       ]);
-      const sprint = ((sprintCur as DbSprint[]) || [])[0] ?? ((sprintAny as DbSprint[]) || [])[0] ?? null;
-      let tasks: DbSprintTask[] = [];
-      let progress: DbTaskProgress[] = [];
-      let updates: DbMeetingUpdate[] = [];
-      if (sprint) {
-        const { data: t } = await supabase.from('sprint_tasks').select('*').eq('sprint_id', sprint.id);
-        tasks = (t as DbSprintTask[]) || [];
-        if (tasks.length) {
-          const { data: p } = await supabase
-            .from('task_progress')
-            .select('*')
-            .in('task_id', tasks.map((x) => x.id));
-          progress = (p as DbTaskProgress[]) || [];
-        }
-      }
-      // Recent past Working Group meetings — for the report section.
-      // Cohort sessions are surfaced separately via the session selector.
-      const nowIso = new Date().toISOString();
-      const { data: meets } = await supabase
-        .from('meetings')
-        .select('*')
-        .eq('kind', 'working_group')
-        .lte('scheduled_at', nowIso)
-        .order('scheduled_at', { ascending: false })
-        .limit(5);
-      const recentMeetings = (meets as DbMeeting[]) || [];
-      const meetingIds = recentMeetings.map((x) => x.id);
 
+      const cohortSessions = (cohortSessRows as DbMeeting[]) || [];
+      const workingGroups = (wgRows as DbMeeting[]) || [];
+      const sprintList = (sprints as DbSprint[]) || [];
+      setAllSprints(sprintList);
+      if (!selectedSprintId) {
+        const cur = sprintList.find((s) => s.is_current) ?? sprintList[sprintList.length - 1] ?? null;
+        if (cur) setSelectedSprintId(cur.id);
+      }
+
+      // Load notes / attendance / updates for ALL working group meetings in one go
+      // so the per-week filter stays cheap on the client.
+      const wgIds = workingGroups.map((m) => m.id);
       const notesByMeeting: Record<string, DbMeetingNotes> = {};
       const attendanceByMeeting: Record<string, AttendanceRow[]> = {};
-
-      if (meetingIds.length) {
-        const [{ data: notesRows }, { data: attRows }] = await Promise.all([
-          supabase.from('meeting_notes').select('*').in('meeting_id', meetingIds),
-          supabase.from('meeting_attendance').select('*').in('meeting_id', meetingIds),
+      const updatesByMeeting: Record<string, DbMeetingUpdate[]> = {};
+      if (wgIds.length) {
+        const [{ data: notesRows }, { data: attRows }, { data: updRows }] = await Promise.all([
+          supabase.from('meeting_notes').select('*').in('meeting_id', wgIds),
+          supabase.from('meeting_attendance').select('*').in('meeting_id', wgIds),
+          supabase.from('meeting_updates').select('*').in('meeting_id', wgIds),
         ]);
-        for (const n of (notesRows as DbMeetingNotes[]) || []) {
-          notesByMeeting[n.meeting_id] = n;
-        }
-        for (const a of (attRows as AttendanceRow[]) || []) {
+        for (const n of (notesRows as DbMeetingNotes[]) || []) notesByMeeting[n.meeting_id] = n;
+        for (const a of (attRows as AttendanceRow[]) || [])
           (attendanceByMeeting[a.meeting_id] ||= []).push(a);
-        }
-        // Round-robin from latest past meeting (used by Wins-this-week section)
-        const lastMeeting = recentMeetings[0];
-        if (lastMeeting) {
-          const { data: u } = await supabase
-            .from('meeting_updates')
-            .select('*')
-            .eq('meeting_id', lastMeeting.id);
-          updates = (u as DbMeetingUpdate[]) || [];
-        }
-      }
-
-      // Sprint completions (per founder, current sprint)
-      let sprintCompletions: DbSprintCompletion[] = [];
-      if (sprint) {
-        const { data: c } = await supabase
-          .from('sprint_completions')
-          .select('*')
-          .eq('sprint_id', sprint.id);
-        sprintCompletions = (c as DbSprintCompletion[]) || [];
+        for (const u of (updRows as DbMeetingUpdate[]) || [])
+          (updatesByMeeting[u.meeting_id] ||= []).push(u);
       }
 
       setData({
         vision: (vision as DbTeamVision) || null,
-        sprint,
-        tasks,
-        progress,
         cohort: (cohort as DbCohortRating[]) || [],
         pitches: (pitches as DbPitch[]) || [],
         feedbacks: (feedbacks as DbPitchFeedback[]) || [],
-        updates,
-        recentMeetings,
+        cohortSessions,
+        workingGroups,
         notesByMeeting,
         attendanceByMeeting,
-        sprintCompletions,
+        updatesByMeeting,
       });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Latest pitch per founder
+  // Load tasks / progress / sprint_completions whenever the selected sprint changes.
+  useEffect(() => {
+    (async () => {
+      if (!selectedSprintId) {
+        setWeekData(null);
+        return;
+      }
+      const sprint = allSprints.find((s) => s.id === selectedSprintId);
+      if (!sprint) {
+        setWeekData(null);
+        return;
+      }
+      const [{ data: t }, { data: c }] = await Promise.all([
+        supabase.from('sprint_tasks').select('*').eq('sprint_id', sprint.id),
+        supabase.from('sprint_completions').select('*').eq('sprint_id', sprint.id),
+      ]);
+      const tasks = (t as DbSprintTask[]) || [];
+      let progress: DbTaskProgress[] = [];
+      if (tasks.length) {
+        const { data: p } = await supabase
+          .from('task_progress')
+          .select('*')
+          .in('task_id', tasks.map((x) => x.id));
+        progress = (p as DbTaskProgress[]) || [];
+      }
+      setWeekData({
+        sprint,
+        tasks,
+        progress,
+        completions: (c as DbSprintCompletion[]) || [],
+      });
+    })();
+  }, [selectedSprintId, allSprints]);
+
+  // Latest pitch per founder (independent of selected week, FI cohort always presents
+  // the most recent version).
   const latestPitchByUser = useMemo(() => {
     const m: Record<string, DbPitch> = {};
     for (const p of data?.pitches ?? []) {
@@ -216,29 +207,34 @@ export function CohortPresent() {
     return m;
   }, [data?.pitches]);
 
-  // Top success across team this week
-  const topSuccesses = useMemo(() => {
-    return (data?.updates ?? [])
-      .filter((u) => !!u.success)
-      .map((u) => {
-        const profile = profiles.find((p) => p.user_id === u.user_id);
-        return { name: profile?.full_name ?? 'A founder', text: u.success! };
-      });
-  }, [data?.updates, profiles]);
-
   if (!data) return <div className="min-h-screen grid place-items-center">Loading…</div>;
 
-  const {
-    vision,
-    sprint,
-    tasks,
-    progress,
-    cohort,
-    recentMeetings,
-    notesByMeeting,
-    attendanceByMeeting,
-    sprintCompletions,
-  } = data;
+  const { vision, cohort, cohortSessions, workingGroups, notesByMeeting, attendanceByMeeting, updatesByMeeting } = data;
+
+  const sprint = weekData?.sprint ?? null;
+  const tasks = weekData?.tasks ?? [];
+  const progress = weekData?.progress ?? [];
+  const sprintCompletions = weekData?.completions ?? [];
+
+  // Find the cohort session whose date falls inside the selected sprint week.
+  const cohortSession = sprint
+    ? cohortSessions.find((m) => {
+        const d = m.scheduled_at.slice(0, 10);
+        return d >= sprint.start_date && d <= sprint.end_date;
+      }) ?? null
+    : null;
+
+  // Working Group meetings that happened inside the selected week.
+  const weekWorkingGroups = sprint
+    ? workingGroups.filter((m) => {
+        const d = m.scheduled_at.slice(0, 10);
+        return d >= sprint.start_date && d <= sprint.end_date;
+      })
+    : [];
+
+  // Round-robin updates from the latest WG meeting in the selected week (most recent).
+  const lastWeekMeeting = weekWorkingGroups[0] ?? null;
+  const weekUpdates = lastWeekMeeting ? updatesByMeeting[lastWeekMeeting.id] ?? [] : [];
 
   const sprintStats = (() => {
     if (!tasks.length || !profiles.length) return { pct: 0, done: 0, total: 0 };
@@ -251,7 +247,6 @@ export function CohortPresent() {
   const standings = latestDate ? computeStandings(rowsForDate(cohort, latestDate)) : [];
   const ourStanding = standings.find((s) => s.team_name === OUR_TEAM);
 
-  // Project list (one-liners)
   const projects = profiles
     .filter((p) => p.project_name || p.project_description)
     .map((p) => ({
@@ -260,6 +255,13 @@ export function CohortPresent() {
       project: p.project_name,
       pitch: p.project_description,
     }));
+
+  const topSuccesses = weekUpdates
+    .filter((u) => !!u.success)
+    .map((u) => {
+      const profile = profiles.find((p) => p.user_id === u.user_id);
+      return { name: profile?.full_name ?? 'A founder', text: u.success! };
+    });
 
   return (
     <div className="min-h-screen bg-white text-ink p-6 sm:p-8 lg:p-14 relative">
@@ -304,45 +306,72 @@ export function CohortPresent() {
           )}
         </div>
 
-        {/* === COHORT SESSION SELECTOR === */}
-        {cohortSessions.length > 0 && selectedCohort && (() => {
-          const isUpcoming = new Date(selectedCohort.scheduled_at) > new Date();
-          const sessionNumber = cohortSessions.length - cohortIdx;
+        {/* === WEEK SELECTOR === */}
+        {allSprints.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs uppercase tracking-wider text-muted">Showing</span>
+            <div className="flex flex-wrap gap-1.5">
+              {allSprints.map((s) => {
+                const active = s.id === selectedSprintId;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSprintId(s.id)}
+                    className={
+                      'px-3 h-9 rounded-lg text-sm font-medium border transition-colors ' +
+                      (active
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-muted border-border hover:text-ink')
+                    }
+                    title={s.name}
+                  >
+                    {s.week_number === 0 ? 'W0 · Onboarding' : `W${s.week_number}`}
+                    {s.is_current && !active && (
+                      <span className="ml-1 text-primary opacity-80">●</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {sprint && (
+              <div className="ml-auto text-sm">
+                <span className="text-muted">Showing:</span>{' '}
+                <span className="font-semibold">{sprint.name}</span>
+                <span className="text-xs text-muted ml-2">
+                  {safeFormat(sprint.start_date, 'MMM d')} – {safeFormat(sprint.end_date, 'MMM d')}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* === COHORT SESSION FOR THIS WEEK === */}
+        {cohortSession && (() => {
+          const isUpcoming = new Date(cohortSession.scheduled_at) > new Date();
           return (
             <section className="bg-bubble/30 border border-primary/15 rounded-2xl p-5 sm:p-6">
-              <div className="flex items-stretch gap-3">
-                <button
-                  type="button"
-                  onClick={() => hasOlder && setCohortIdx((i) => i + 1)}
-                  disabled={!hasOlder}
-                  className="shrink-0 w-10 sm:w-12 grid place-items-center rounded-xl bg-white border border-border text-ink hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Previous cohort session"
-                  title="Previous cohort session"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <div className="flex-1 min-w-0 text-center">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <div className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-muted">
-                    Cohort session {sessionNumber} of {cohortSessions.length}
-                    {isUpcoming ? ' · upcoming' : ''}
+                    Cohort session for this week{isUpcoming ? ' · upcoming' : ''}
                   </div>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 break-words">
-                    {selectedCohort.title}
+                  <div className="text-xl sm:text-2xl font-bold mt-1 break-words">
+                    {cohortSession.title}
                   </div>
                   <div className="text-sm text-muted mt-1">
-                    {safeFormat(selectedCohort.scheduled_at, 'EEEE, MMMM d, yyyy · HH:mm')}
+                    {safeFormat(cohortSession.scheduled_at, 'EEEE, MMMM d, yyyy · HH:mm')}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => hasNewer && setCohortIdx((i) => i - 1)}
-                  disabled={!hasNewer}
-                  className="shrink-0 w-10 sm:w-12 grid place-items-center rounded-xl bg-white border border-border text-ink hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Next cohort session"
-                  title="Next cohort session"
-                >
-                  <ChevronRight size={22} />
-                </button>
+                {cohortSession.meet_url && (
+                  <a
+                    href={cohortSession.meet_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark shrink-0"
+                  >
+                    <Video size={16} /> Join Zoom
+                  </a>
+                )}
               </div>
             </section>
           );
@@ -403,19 +432,18 @@ export function CohortPresent() {
           </div>
         </section>
 
-        {/* === WORKING GROUP RESULTS === */}
+        {/* === WORKING GROUP RESULTS (this week) === */}
         <section>
           <div className="text-xs uppercase tracking-wider text-muted mb-4">
             Working group results &amp; reports
           </div>
-          {recentMeetings.length === 0 ? (
+          {weekWorkingGroups.length === 0 ? (
             <div className="bg-bg rounded-2xl p-6 text-sm text-muted">
-              No past meetings yet — once a Working Group session has happened, the President's
-              minutes and team activity will appear here.
+              No Working Group sessions logged for this week yet.
             </div>
           ) : (
             <div className="space-y-5">
-              {recentMeetings.slice(0, 3).map((mt) => {
+              {weekWorkingGroups.slice(0, 3).map((mt) => {
                 const notes = notesByMeeting[mt.id];
                 const att = attendanceByMeeting[mt.id] ?? [];
                 const present = att.filter((a) => a.status === 'present').length;
@@ -484,11 +512,6 @@ export function CohortPresent() {
                   </div>
                 );
               })}
-              {recentMeetings.length > 3 && (
-                <div className="text-xs text-muted text-center">
-                  Showing the 3 most recent meetings of {recentMeetings.length} total.
-                </div>
-              )}
             </div>
           )}
         </section>
@@ -567,7 +590,7 @@ export function CohortPresent() {
           </div>
         </section>
 
-        {/* === FOUNDERS & PROJECTS (now at the bottom) === */}
+        {/* === FOUNDERS & PROJECTS === */}
         <section>
           <div className="text-xs uppercase tracking-wider text-muted mb-4">Who we are</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
