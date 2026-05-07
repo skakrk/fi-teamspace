@@ -13,7 +13,7 @@ export const PRESIDENT_RESPONSIBILITIES = [
   },
   {
     code: 'pitch_timing',
-    label: 'Keep time for teammates\' Feedback Pitches so everyone gets mentor feedback in the allotted slot',
+    label: "Keep time for each teammate's Feedback Pitch so everyone gets mentor feedback in the allotted slot",
   },
   {
     code: 'minutes',
