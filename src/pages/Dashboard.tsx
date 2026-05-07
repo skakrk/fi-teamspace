@@ -884,9 +884,6 @@ export function DashboardPresent() {
         <section>
           <div className="flex items-end justify-between mb-3">
             <div>
-              <div className="text-xs uppercase tracking-wider text-muted">
-                Round-robin · 1 success / 1 challenge / 1 learning
-              </div>
               <h2 className="text-2xl font-semibold">This week's reflections</h2>
             </div>
             <div className="text-sm text-muted">
