@@ -33,7 +33,8 @@ import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection'
 const OUR_TEAM = 'Breakers Team';
 
 type DashboardData = {
-  meeting: DbMeeting | null;
+  meeting: DbMeeting | null; // most relevant for THIS WEEK's reflections (past or upcoming)
+  nextMeeting: DbMeeting | null; // strictly the next upcoming meeting
   sprint: DbSprint | null;
   tasks: DbSprintTask[];
   progress: DbTaskProgress[];
@@ -169,6 +170,7 @@ function useDashboardData() {
 
       setData({
         meeting,
+        nextMeeting: upcoming,
         sprint,
         tasks,
         progress,
@@ -300,7 +302,7 @@ export function Dashboard() {
 
   if (!data) return <div className="text-muted text-sm">Loading…</div>;
 
-  const { meeting, sprint, latestPitchByUser, meetingUpdates, poll, cohort } = data;
+  const { meeting, nextMeeting, sprint, latestPitchByUser, meetingUpdates, poll, cohort } = data;
 
   return (
     <div className="space-y-6">
@@ -429,29 +431,29 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardBody>
-            {!meeting ? (
+            {!nextMeeting ? (
               <div className="text-sm text-muted">No upcoming meeting.</div>
             ) : (
               <div className="space-y-2">
-                <div className="font-semibold">{meeting.title}</div>
+                <div className="font-semibold">{nextMeeting.title}</div>
                 <div className="text-sm text-muted">
-                  {safeFormat(meeting.scheduled_at, 'EEE, MMM d · HH:mm')}
+                  {safeFormat(nextMeeting.scheduled_at, 'EEE, MMM d · HH:mm')}
                 </div>
                 <div className="text-xs text-muted">
-                  in {safeDistance(meeting.scheduled_at)}
+                  in {safeDistance(nextMeeting.scheduled_at)}
                 </div>
                 <div className="flex gap-2 pt-2 flex-wrap">
-                  {meeting.meet_url && (
-                    <a href={meeting.meet_url} target="_blank" rel="noreferrer">
+                  {nextMeeting.meet_url && (
+                    <a href={nextMeeting.meet_url} target="_blank" rel="noreferrer">
                       <Button size="sm">
                         <Video size={14} /> Join
                       </Button>
                     </a>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => downloadICS(meeting)}>
+                  <Button size="sm" variant="outline" onClick={() => downloadICS(nextMeeting)}>
                     <Download size={14} /> Calendar
                   </Button>
-                  <Link to={`/meetings/${meeting.id}`}>
+                  <Link to={`/meetings/${nextMeeting.id}`}>
                     <Button size="sm" variant="ghost">
                       Open
                     </Button>
