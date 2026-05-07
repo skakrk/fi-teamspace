@@ -253,6 +253,7 @@ export function MeetingDetail() {
         </Card>
       )}
 
+      {m.kind !== 'cohort_session' && (
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle>Attendance</CardTitle>
@@ -302,7 +303,9 @@ export function MeetingDetail() {
           </div>
         </CardBody>
       </Card>
+      )}
 
+      {m.kind !== 'cohort_session' && (
       <Card>
         <CardHeader>
           <CardTitle>Round-robin: 1 success / 1 challenge / 1 learning</CardTitle>
@@ -369,7 +372,9 @@ export function MeetingDetail() {
           </div>
         </CardBody>
       </Card>
+      )}
 
+      {m.kind !== 'cohort_session' && (
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle>Pitch timings</CardTitle>
@@ -397,6 +402,7 @@ export function MeetingDetail() {
           </div>
         </CardBody>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -503,6 +509,7 @@ export function MeetingDetail() {
         </CardBody>
       </Card>
 
+      {m.kind !== 'cohort_session' && (
       <Card>
         <CardHeader className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle>Meeting Minutes (President)</CardTitle>
@@ -609,6 +616,7 @@ export function MeetingDetail() {
           )}
         </CardBody>
       </Card>
+      )}
     </div>
   );
 }
