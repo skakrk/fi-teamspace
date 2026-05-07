@@ -5,6 +5,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input, Label } from '@/components/ui/Input';
 import { Logo } from '@/components/shared/Logo';
+import { ReflectionLabel } from '@/components/shared/Reflection';
 import { supabase, type DbCohortRating, type DbMeeting, type DbMeetingNotes, type DbMeetingUpdate, type DbPitch, type DbPitchFeedback, type DbProfile, type DbSprint, type DbSprintCompletion, type DbTeamVision } from '@/lib/supabase';
 import { computeStandings, latestSnapshotDate, rowsForDate } from '@/lib/standings';
 import { avg, formatScore, safeFormat } from '@/lib/utils';
@@ -204,11 +205,17 @@ function SharedView({ payload }: { payload: SharePayload }) {
       pitch: p.project_description,
     }));
 
-  const topSuccesses = weekUpdates
-    .filter((u) => !!u.success)
+  const weekRoundRobin = weekUpdates
+    .filter((u) => u.success || u.challenge || u.learning)
     .map((u) => {
       const profile = profiles.find((p) => p.user_id === u.user_id);
-      return { name: profile?.full_name ?? 'A founder', text: u.success! };
+      return {
+        name: profile?.full_name ?? 'A founder',
+        avatar: profile?.avatar_url ?? null,
+        success: u.success,
+        challenge: u.challenge,
+        learning: u.learning,
+      };
     });
 
   const showWeeklyContent = sprint && sprint.week_number >= 2;
@@ -371,17 +378,41 @@ function SharedView({ payload }: { payload: SharePayload }) {
           </section>
         )}
 
-        {showWeeklyContent && topSuccesses.length > 0 && (
+        {showWeeklyContent && weekRoundRobin.length > 0 && (
           <section>
-            <div className="text-xs uppercase tracking-wider text-muted mb-4">Wins this week</div>
+            <div className="flex items-end justify-between mb-4">
+              <h2 className="text-2xl font-semibold">This week's reflections</h2>
+              <div className="text-sm text-muted">
+                {weekRoundRobin.length}/{profiles.length} founders submitted
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {topSuccesses.map((s, i) => (
+              {weekRoundRobin.map((r, i) => (
                 <div
                   key={i}
                   className="bg-bubble/30 border border-primary/20 rounded-xl p-4"
                 >
-                  <div className="text-ok font-bold text-sm mb-1">✓ {s.name}</div>
-                  <div className="text-base">{s.text}</div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Avatar name={r.name} src={r.avatar} size="sm" />
+                    <div className="font-semibold">{r.name}</div>
+                  </div>
+                  <div className="space-y-1.5 text-sm">
+                    {r.success && (
+                      <div>
+                        <ReflectionLabel kind="success" /> {r.success}
+                      </div>
+                    )}
+                    {r.challenge && (
+                      <div>
+                        <ReflectionLabel kind="challenge" /> {r.challenge}
+                      </div>
+                    )}
+                    {r.learning && (
+                      <div>
+                        <ReflectionLabel kind="learning" /> {r.learning}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -17,6 +17,7 @@ import {
   type DbMeetingUpdate,
 } from '@/lib/supabase';
 import { downloadICS } from '@/lib/ics';
+import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
 type AttendanceRow = { meeting_id: string; user_id: string; status: AttendanceStatus };
@@ -372,18 +373,17 @@ export function MeetingDetail() {
                   <div className="text-sm space-y-1">
                     {u.success && (
                       <div>
-                        <span className="text-ok font-medium">✓ Success:</span> {u.success}
+                        <ReflectionLabel kind="success" bold={false} /> {u.success}
                       </div>
                     )}
                     {u.challenge && (
                       <div>
-                        <span className="text-warn font-medium">! Challenge:</span> {u.challenge}
+                        <ReflectionLabel kind="challenge" bold={false} /> {u.challenge}
                       </div>
                     )}
                     {u.learning && (
                       <div>
-                        <span className="text-primary-deep font-medium">★ Learning:</span>{' '}
-                        {u.learning}
+                        <ReflectionLabel kind="learning" bold={false} /> {u.learning}
                       </div>
                     )}
                   </div>
@@ -745,18 +745,21 @@ function RoundRobinSummary({
             <div className="font-medium">{p.full_name}</div>
             <div className="space-y-0.5 text-xs">
               {u.success && (
-                <div>
-                  <span className="text-ok font-medium">✓</span> {u.success}
+                <div className="flex items-start gap-1.5">
+                  <ReflectionIcon kind="success" size={12} className="mt-0.5" />
+                  <span className="min-w-0">{u.success}</span>
                 </div>
               )}
               {u.challenge && (
-                <div>
-                  <span className="text-warn font-medium">!</span> {u.challenge}
+                <div className="flex items-start gap-1.5">
+                  <ReflectionIcon kind="challenge" size={12} className="mt-0.5" />
+                  <span className="min-w-0">{u.challenge}</span>
                 </div>
               )}
               {u.learning && (
-                <div>
-                  <span className="text-primary-deep font-medium">★</span> {u.learning}
+                <div className="flex items-start gap-1.5">
+                  <ReflectionIcon kind="learning" size={12} className="mt-0.5" />
+                  <span className="min-w-0">{u.learning}</span>
                 </div>
               )}
             </div>

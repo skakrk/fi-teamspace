@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeam } from '@/hooks/useTeam';
+import { ReflectionLabel } from '@/components/shared/Reflection';
 import {
   supabase,
   type DbCohortRating,
@@ -663,18 +664,17 @@ export function CohortPresent() {
                     <div className="space-y-1.5 text-sm">
                       {r.success && (
                         <div>
-                          <span className="text-ok font-bold">✓ Success:</span> {r.success}
+                          <ReflectionLabel kind="success" /> {r.success}
                         </div>
                       )}
                       {r.challenge && (
                         <div>
-                          <span className="text-warn font-bold">! Challenge:</span> {r.challenge}
+                          <ReflectionLabel kind="challenge" /> {r.challenge}
                         </div>
                       )}
                       {r.learning && (
                         <div>
-                          <span className="text-primary-deep font-bold">★ Learning:</span>{' '}
-                          {r.learning}
+                          <ReflectionLabel kind="learning" /> {r.learning}
                         </div>
                       )}
                     </div>

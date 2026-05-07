@@ -28,6 +28,7 @@ import {
 import { LayoutDashboard, Megaphone, CalendarClock, Crown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
+import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
 
 const OUR_TEAM = 'Breakers Team';
 
@@ -552,18 +553,24 @@ export function Dashboard() {
                       <Avatar name={p.full_name} src={p.avatar_url} size="sm" />
                       <div className="text-sm font-medium">{p.full_name || 'Unnamed'}</div>
                     </div>
-                    <div className="text-xs space-y-1">
-                      <div>
-                        <span className="text-ok font-medium">✓</span>{' '}
-                        {u?.success || <span className="text-muted">—</span>}
+                    <div className="text-xs space-y-1.5">
+                      <div className="flex items-start gap-1.5">
+                        <ReflectionIcon kind="success" size={14} className="mt-0.5" />
+                        <span className="min-w-0">
+                          {u?.success || <span className="text-muted">—</span>}
+                        </span>
                       </div>
-                      <div>
-                        <span className="text-warn font-medium">!</span>{' '}
-                        {u?.challenge || <span className="text-muted">—</span>}
+                      <div className="flex items-start gap-1.5">
+                        <ReflectionIcon kind="challenge" size={14} className="mt-0.5" />
+                        <span className="min-w-0">
+                          {u?.challenge || <span className="text-muted">—</span>}
+                        </span>
                       </div>
-                      <div>
-                        <span className="text-primary-deep font-medium">★</span>{' '}
-                        {u?.learning || <span className="text-muted">—</span>}
+                      <div className="flex items-start gap-1.5">
+                        <ReflectionIcon kind="learning" size={14} className="mt-0.5" />
+                        <span className="min-w-0">
+                          {u?.learning || <span className="text-muted">—</span>}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -916,18 +923,17 @@ export function DashboardPresent() {
                     <div className="space-y-1.5 text-sm">
                       {u?.success && (
                         <div>
-                          <span className="text-ok font-bold">✓ Success:</span> {u.success}
+                          <ReflectionLabel kind="success" /> {u.success}
                         </div>
                       )}
                       {u?.challenge && (
                         <div>
-                          <span className="text-warn font-bold">! Challenge:</span> {u.challenge}
+                          <ReflectionLabel kind="challenge" /> {u.challenge}
                         </div>
                       )}
                       {u?.learning && (
                         <div>
-                          <span className="text-primary-deep font-bold">★ Learning:</span>{' '}
-                          {u.learning}
+                          <ReflectionLabel kind="learning" /> {u.learning}
                         </div>
                       )}
                     </div>
