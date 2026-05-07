@@ -45,6 +45,12 @@ export function MeetingDetail() {
     summary: '',
   });
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [notesSaveState, setNotesSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  );
+  const [recordingSaveState, setRecordingSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
 
   const president = profiles.find((p) => p.is_president) ?? null;
   const iAmPresident = !!user && president?.user_id === user.id;
@@ -129,9 +135,6 @@ export function MeetingDetail() {
     await reload();
   }
 
-  const [notesSaveState, setNotesSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
-    'idle',
-  );
   async function saveNotes() {
     if (!id) return;
     setNotesSaveState('saving');
@@ -157,9 +160,6 @@ export function MeetingDetail() {
     setTimeout(() => setNotesSaveState('idle'), 2000);
   }
 
-  const [recordingSaveState, setRecordingSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
-    'idle',
-  );
   async function saveRecording() {
     if (!id) return;
     setRecordingSaveState('saving');
