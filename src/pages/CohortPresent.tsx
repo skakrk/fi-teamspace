@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Link2, Video } from 'lucide-react';
+import { Check, Copy, Link2, Lock, Share2, Video } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
+import { useAuth } from '@/hooks/useAuth';
 import { useTeam } from '@/hooks/useTeam';
 import {
   supabase,
@@ -60,12 +63,101 @@ type WeekData = {
 };
 
 export function CohortPresent() {
+  const { user } = useAuth();
   const { profiles } = useTeam();
   const [data, setData] = useState<Bundle | null>(null);
   const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareCreating, setShareCreating] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareInfo, setShareInfo] = useState<{ url: string; pin: string; expiresAt: string } | null>(
+    null,
+  );
+  const [copiedField, setCopiedField] = useState<'url' | 'pin' | 'both' | null>(null);
+
+  function copyToClipboard(text: string, field: 'url' | 'pin' | 'both') {
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    };
+    (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
+      () => {
+        setCopiedField(field);
+        setTimeout(() => setCopiedField(null), 1500);
+      },
+      () => {
+        fallback();
+        setCopiedField(field);
+        setTimeout(() => setCopiedField(null), 1500);
+      },
+    );
+  }
+
+  async function createShare() {
+    if (!user) {
+      setShareError('You need to be signed in to create a share link.');
+      return;
+    }
+    setShareCreating(true);
+    setShareError(null);
+    setShareInfo(null);
+    try {
+      const tokenBytes = new Uint8Array(24);
+      crypto.getRandomValues(tokenBytes);
+      const token = Array.from(tokenBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .slice(0, 32);
+      const pinNum = (crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000)
+        .toString()
+        .padStart(6, '0');
+      const enc = new TextEncoder().encode(pinNum);
+      const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+      const pinHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { error } = await supabase.from('present_shares').insert({
+        token,
+        pin_hash: pinHash,
+        kind: 'cohort_present',
+        sprint_id: selectedSprintId,
+        created_by: user.id,
+        expires_at: expiresAt,
+      });
+      if (error) {
+        setShareError(error.message);
+        return;
+      }
+      const url = `${window.location.origin}${import.meta.env.BASE_URL}#/share/cohort/${token}`;
+      setShareInfo({ url, pin: pinNum, expiresAt });
+    } catch (e: unknown) {
+      setShareError(e instanceof Error ? e.message : 'Could not create share link');
+    } finally {
+      setShareCreating(false);
+    }
+  }
+
+  function openShareDialog() {
+    setShareInfo(null);
+    setShareError(null);
+    setShareOpen(true);
+    void createShare();
+  }
 
   async function copyShareLink() {
     const url = window.location.href;
@@ -281,21 +373,32 @@ export function CohortPresent() {
 
   return (
     <div className="min-h-screen bg-white text-ink p-6 sm:p-8 lg:p-14 relative">
-      <button
-        onClick={copyShareLink}
-        className="absolute top-4 right-4 sm:top-6 sm:right-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink hover:bg-bg transition-colors shadow-sm z-10"
-        aria-label="Copy share link"
-      >
-        {copied ? (
-          <>
-            <Check size={14} className="text-ok" /> Link copied
-          </>
-        ) : (
-          <>
-            <Link2 size={14} /> Copy share link
-          </>
-        )}
-      </button>
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10">
+        <button
+          onClick={copyShareLink}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink hover:bg-bg transition-colors shadow-sm"
+          aria-label="Copy direct link"
+          title="Copy this URL (works for signed-in teammates)"
+        >
+          {copied ? (
+            <>
+              <Check size={14} className="text-ok" /> Link copied
+            </>
+          ) : (
+            <>
+              <Link2 size={14} /> Copy link
+            </>
+          )}
+        </button>
+        <button
+          onClick={openShareDialog}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary-dark transition-colors shadow-sm"
+          aria-label="Generate public share link"
+          title="Create a PIN-protected public link"
+        >
+          <Share2 size={14} /> Share with PIN
+        </button>
+      </div>
       <div className="max-w-6xl mx-auto space-y-12">
         {/* === HERO === */}
         <div className="text-center pb-6 border-b border-border">
@@ -649,6 +752,99 @@ export function CohortPresent() {
           </Link>
         </div>
       </div>
+
+      <Dialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Public share link"
+        description="Anyone with this link AND the PIN can view this page read-only. Don't share both in the same channel."
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShareOpen(false)}>
+              Close
+            </Button>
+            {shareInfo && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!shareInfo) return;
+                  copyToClipboard(`${shareInfo.url}\nPIN: ${shareInfo.pin}`, 'both');
+                }}
+              >
+                {copiedField === 'both' ? (
+                  <>
+                    <Check size={14} /> Copied both
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} /> Copy link + PIN
+                  </>
+                )}
+              </Button>
+            )}
+          </>
+        }
+      >
+        {shareCreating && <div className="text-sm text-muted">Generating link…</div>}
+        {shareError && !shareCreating && (
+          <div className="text-sm text-bad bg-bad/5 border border-bad/20 rounded-lg p-3">
+            {shareError}
+          </div>
+        )}
+        {shareInfo && !shareCreating && (
+          <div className="space-y-4">
+            <div className="bg-ok/10 border border-ok/30 rounded-lg p-3 text-sm flex items-start gap-2">
+              <Lock size={14} className="text-ok mt-0.5 shrink-0" />
+              <span>
+                Save these now — the PIN won't be shown again. Both expire on{' '}
+                <strong>{new Date(shareInfo.expiresAt).toLocaleDateString()}</strong>.
+              </span>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium text-muted mb-1">Link</div>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={shareInfo.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 rounded-lg border border-border bg-bg text-ink px-3 py-2 text-xs font-mono break-all focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => copyToClipboard(shareInfo.url, 'url')}
+                >
+                  {copiedField === 'url' ? <Check size={14} /> : <Copy size={14} />}
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium text-muted mb-1">PIN</div>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={shareInfo.pin}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 rounded-lg border border-border bg-bg text-ink px-3 py-2 text-lg font-mono tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => copyToClipboard(shareInfo.pin, 'pin')}
+                >
+                  {copiedField === 'pin' ? <Check size={14} /> : <Copy size={14} />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-xs text-muted">
+              Tip: send the link in one channel (e.g. email) and the PIN in another (e.g. WhatsApp)
+              for an extra layer of safety.
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }
