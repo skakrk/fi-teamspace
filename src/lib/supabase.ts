@@ -119,6 +119,7 @@ export type DbPitch = {
   deck_url: string | null;
   status: PitchStatus;
   meeting_id: string | null;
+  sprint_id: string | null;
   created_at: string;
 };
 

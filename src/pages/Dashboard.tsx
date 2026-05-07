@@ -36,6 +36,7 @@ type DashboardData = {
   sprint: DbSprint | null;
   tasks: DbSprintTask[];
   progress: DbTaskProgress[];
+  allPitches: DbPitch[];
   latestPitchByUser: Record<string, DbPitch>;
   meetingUpdates: DbMeetingUpdate[];
   poll: DbPoll | null;
@@ -170,6 +171,7 @@ function useDashboardData() {
         sprint,
         tasks,
         progress,
+        allPitches,
         latestPitchByUser: byUser,
         meetingUpdates: updates,
         poll: openPolls[0] ?? null,
@@ -649,10 +651,19 @@ export function DashboardPresent() {
 
   if (!data) return <div className="min-h-screen grid place-items-center">Loading…</div>;
 
-  const { latestPitchByUser, meetingUpdates, cohort } = data;
+  const { allPitches, meetingUpdates, cohort } = data;
   const sprint = allSprints.find((s) => s.id === selectedSprintId) ?? null;
   const tasks = selectedTasks;
   const progress = selectedProgress;
+
+  // Latest pitch per founder restricted to the selected sprint week.
+  const latestPitchByUser: Record<string, DbPitch> = {};
+  for (const p of allPitches) {
+    if (selectedSprintId && p.sprint_id !== selectedSprintId) continue;
+    if (!latestPitchByUser[p.user_id] || latestPitchByUser[p.user_id].version < p.version) {
+      latestPitchByUser[p.user_id] = p;
+    }
+  }
 
   const latestDate = latestSnapshotDate(cohort);
   const standings = latestDate ? computeStandings(rowsForDate(cohort, latestDate)) : [];
