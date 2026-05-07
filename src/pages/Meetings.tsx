@@ -197,7 +197,14 @@ export function Meetings() {
   }, []);
 
   const now = Date.now();
-  const upcoming = meetings.filter((m) => new Date(m.scheduled_at).getTime() >= now - 60 * 60 * 1000);
+  // Upcoming: nearest first (soonest at the top).
+  const upcoming = meetings
+    .filter((m) => new Date(m.scheduled_at).getTime() >= now - 60 * 60 * 1000)
+    .slice()
+    .sort(
+      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+    );
+  // Past: most recent first (already the default order).
   const past = meetings.filter((m) => new Date(m.scheduled_at).getTime() < now - 60 * 60 * 1000);
 
   async function saveWorkingGroup() {
