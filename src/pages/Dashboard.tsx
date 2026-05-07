@@ -77,13 +77,14 @@ function useDashboardData() {
       const [
         upcomingMeetings,
         pastMeetings,
+        nextAnyMeetings,
         currentSprintRows,
         anySprintRows,
         allPitches,
         openPolls,
         cohortRows,
       ] = await Promise.all([
-        // Next upcoming Working Group meeting.
+        // Next upcoming Working Group meeting (used for reflections logic).
         safeQuery<DbMeeting>('meetings/upcoming', () =>
           supabase
             .from('meetings')
@@ -102,6 +103,16 @@ function useDashboardData() {
             .eq('kind', 'working_group')
             .lt('scheduled_at', nowIso)
             .order('scheduled_at', { ascending: false })
+            .limit(1),
+        ),
+        // Next upcoming meeting of ANY kind — used for the "Next meeting"
+        // card so an imminent Cohort Session also surfaces, not just WG.
+        safeQuery<DbMeeting>('meetings/nextAny', () =>
+          supabase
+            .from('meetings')
+            .select('*')
+            .gte('scheduled_at', nowIso)
+            .order('scheduled_at', { ascending: true })
             .limit(1),
         ),
         safeQuery<DbSprint>('sprints/current', () =>
@@ -170,7 +181,7 @@ function useDashboardData() {
 
       setData({
         meeting,
-        nextMeeting: upcoming,
+        nextMeeting: nextAnyMeetings[0] ?? upcoming,
         sprint,
         tasks,
         progress,
