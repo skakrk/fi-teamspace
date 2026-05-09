@@ -18,6 +18,8 @@ import {
 } from '@/lib/supabase';
 import { downloadICS } from '@/lib/ics';
 import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
+import { canProxy, isProxyFilled, isOwnerFilled } from '@/lib/presidentMode';
+import { ProxyBadge } from '@/components/shared/ProxyBadge';
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
 type AttendanceRow = { meeting_id: string; user_id: string; status: AttendanceStatus };
@@ -129,9 +131,30 @@ export function MeetingDetail() {
         success: next.success,
         challenge: next.challenge,
         learning: next.learning,
+        filled_by: user.id,
       },
       { onConflict: 'meeting_id,user_id' },
     );
+    await reload();
+  }
+
+  async function saveUpdateFor(
+    targetUserId: string,
+    fields: { success: string; challenge: string; learning: string },
+  ) {
+    if (!user || !id) return;
+    const { error } = await supabase.from('meeting_updates').upsert(
+      {
+        meeting_id: id,
+        user_id: targetUserId,
+        success: fields.success || null,
+        challenge: fields.challenge || null,
+        learning: fields.learning || null,
+        filled_by: user.id,
+      },
+      { onConflict: 'meeting_id,user_id' },
+    );
+    if (error) return notifyError('Could not save reflection on behalf', error);
     await reload();
   }
 
@@ -364,11 +387,16 @@ export function MeetingDetail() {
             {profiles.map((p) => {
               const u = updates.find((x) => x.user_id === p.user_id);
               if (!u || (!u.success && !u.challenge && !u.learning)) return null;
+              const proxy = isProxyFilled(u);
+              const fillerName = proxy
+                ? profiles.find((x) => x.user_id === u.filled_by)?.full_name ?? null
+                : null;
               return (
                 <div key={p.user_id} className="bg-bg rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Avatar name={p.full_name} src={p.avatar_url} size="sm" />
                     <div className="text-sm font-medium">{p.full_name}</div>
+                    {proxy && <ProxyBadge fillerName={fillerName} className="ml-1" />}
                   </div>
                   <div className="text-sm space-y-1">
                     {u.success && (
@@ -391,6 +419,36 @@ export function MeetingDetail() {
               );
             })}
           </div>
+
+          {iAmPresident && (() => {
+            const proxyTargets = profiles.filter((p) => {
+              if (p.user_id === user?.id) return false;
+              const u = updates.find((x) => x.user_id === p.user_id);
+              return canProxy(u ?? null);
+            });
+            if (!proxyTargets.length) return null;
+            return (
+              <div className="border-t border-border pt-4 mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium">Fill on behalf</div>
+                  <span className="text-xs text-muted">
+                    Proxy mode — only shown for teammates without an owner-filled reflection.
+                  </span>
+                </div>
+                {proxyTargets.map((p) => {
+                  const existing = updates.find((x) => x.user_id === p.user_id);
+                  return (
+                    <ProxyReflectionForm
+                      key={p.user_id}
+                      target={p}
+                      existing={existing ?? null}
+                      onSave={(fields) => saveUpdateFor(p.user_id, fields)}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
         </CardBody>
       </Card>
       )}
@@ -834,6 +892,65 @@ function MeetingMinutesView({
           <div className="text-sm whitespace-pre-line">{notes.content}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProxyReflectionForm({
+  target,
+  existing,
+  onSave,
+}: {
+  target: { user_id: string; full_name: string | null; avatar_url: string | null };
+  existing: DbMeetingUpdate | null;
+  onSave: (fields: { success: string; challenge: string; learning: string }) => void | Promise<void>;
+}) {
+  const [success, setSuccess] = useState(existing?.success ?? '');
+  const [challenge, setChallenge] = useState(existing?.challenge ?? '');
+  const [learning, setLearning] = useState(existing?.learning ?? '');
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave({ success, challenge, learning });
+    setSaving(false);
+    setSavedAt(new Date().toLocaleTimeString());
+  }
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Avatar name={target.full_name || '?'} src={target.avatar_url} size="sm" />
+        <div className="text-sm font-medium">{target.full_name || 'Unnamed'}</div>
+        <Badge tone="warn">Proxy</Badge>
+      </div>
+      <div className="space-y-2">
+        <Textarea
+          rows={2}
+          value={success}
+          onChange={(e) => setSuccess(e.target.value)}
+          placeholder="Success they'd report"
+        />
+        <Textarea
+          rows={2}
+          value={challenge}
+          onChange={(e) => setChallenge(e.target.value)}
+          placeholder="Challenge they're facing"
+        />
+        <Textarea
+          rows={2}
+          value={learning}
+          onChange={(e) => setLearning(e.target.value)}
+          placeholder="Learning they took away"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-3 mt-2">
+        {savedAt && <span className="text-xs text-muted">Saved at {savedAt}</span>}
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save on behalf'}
+        </Button>
+      </div>
     </div>
   );
 }

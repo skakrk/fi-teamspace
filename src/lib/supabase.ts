@@ -35,6 +35,7 @@ export type DbProfile = {
   telegram: string | null;
   website: string | null;
   is_president: boolean;
+  filled_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -65,6 +66,7 @@ export type DbTaskProgress = {
   user_id: string;
   status: TaskStatus;
   notes: string | null;
+  filled_by: string | null;
   updated_at: string;
 };
 
@@ -94,6 +96,7 @@ export type DbMeetingUpdate = {
   success: string | null;
   challenge: string | null;
   learning: string | null;
+  filled_by: string | null;
   updated_at: string;
 };
 
@@ -120,6 +123,7 @@ export type DbPitch = {
   status: PitchStatus;
   meeting_id: string | null;
   sprint_id: string | null;
+  filled_by: string | null;
   created_at: string;
 };
 
@@ -191,6 +195,7 @@ export type DbSprintCompletion = {
   user_id: string;
   completed_at: string;
   notes: string | null;
+  filled_by: string | null;
 };
 
 export type DbProjectFeedback = {

@@ -8,7 +8,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { FieldHint, Input, Label, Textarea } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useTeam';
+import { useProfile, useTeam } from '@/hooks/useTeam';
 import {
   supabase,
   type DbPitch,
@@ -18,6 +18,8 @@ import {
 } from '@/lib/supabase';
 import { avg, extractYouTubeId, formatScore } from '@/lib/utils';
 import { notifyError } from '@/lib/notify';
+import { canProxy, isProxyFilled } from '@/lib/presidentMode';
+import { ProxyBadge } from '@/components/shared/ProxyBadge';
 
 function ScoreInput({
   value,
@@ -160,12 +162,20 @@ export function PitchDetail() {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
   const { profile } = useProfile(userId);
+  const { profiles } = useTeam();
+  const myProfile = profiles.find((p) => p.user_id === user?.id);
+  const iAmPresident = !!myProfile?.is_president;
   const isOwner = user?.id === userId;
 
   const [pitches, setPitches] = useState<DbPitch[]>([]);
   const [feedbacks, setFeedbacks] = useState<DbPitchFeedback[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = pitches.find((p) => p.id === activeId) || null;
+  // Latest pitch per-user defines current self-vs-proxy activity for president-mode.
+  const latestPitch = pitches[0] ?? null;
+  const proxyAllowed = !isOwner && iAmPresident && canProxy(latestPitch);
+  const canEdit = isOwner || (iAmPresident && active != null && canProxy(active));
+  const canCreate = isOwner || (iAmPresident && !isOwner && canProxy(latestPitch));
 
   // sprints for picking which week a new pitch belongs to
   const [sprints, setSprints] = useState<DbSprint[]>([]);
@@ -269,6 +279,7 @@ export function PitchDetail() {
         deck_url: seed?.deck_url ?? null,
         status: 'draft' as PitchStatus,
         sprint_id: createSprintId,
+        filled_by: user.id,
       })
       .select()
       .maybeSingle();
@@ -302,7 +313,7 @@ export function PitchDetail() {
   }
 
   async function savePitch() {
-    if (!active) return;
+    if (!active || !user) return;
     await supabase
       .from('pitches')
       .update({
@@ -311,6 +322,7 @@ export function PitchDetail() {
         video_url: draft.video_url || null,
         deck_url: draft.deck_url || null,
         status: (draft.status as PitchStatus) || 'draft',
+        filled_by: user.id,
       })
       .eq('id', active.id);
     await reload();
@@ -394,9 +406,9 @@ export function PitchDetail() {
             ))}
             {!pitches.length && <div className="text-sm text-muted">No versions yet.</div>}
           </div>
-          {isOwner && (
+          {canCreate && (
             <Button size="sm" className="w-full mt-3" onClick={openCreateDialog}>
-              + New version
+              + New version{!isOwner && proxyAllowed ? ' (on behalf)' : ''}
             </Button>
           )}
         </div>
@@ -407,6 +419,8 @@ export function PitchDetail() {
               <CardBody className="text-sm text-muted">
                 {isOwner
                   ? 'Click "New version" to draft your first pitch.'
+                  : proxyAllowed
+                  ? 'No pitch yet — click "New version (on behalf)" to draft one for them.'
                   : 'No pitch versions yet.'}
               </CardBody>
             </Card>
@@ -414,6 +428,13 @@ export function PitchDetail() {
 
           {active && (
             <>
+              {!isOwner && canEdit && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-ink/90">
+                  <strong>Proxy mode</strong> — editing this pitch on behalf of{' '}
+                  {profile.full_name}. Saves are stamped <em>filled by you</em>; once they edit
+                  themselves, this slot becomes read-only for the president.
+                </div>
+              )}
               <Card>
                 <CardHeader className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -421,6 +442,13 @@ export function PitchDetail() {
                     {active.status === 'ready' && <Badge tone="ok">Ready for review</Badge>}
                     {active.status === 'reviewed' && <Badge tone="primary">Reviewed</Badge>}
                     {active.status === 'draft' && <Badge tone="neutral">Draft</Badge>}
+                    {isProxyFilled(active) && (
+                      <ProxyBadge
+                        fillerName={
+                          profiles.find((x) => x.user_id === active.filled_by)?.full_name ?? null
+                        }
+                      />
+                    )}
                   </div>
                   <div className="text-xs text-muted">
                     {fbForActive.length} feedback{fbForActive.length === 1 ? '' : 's'}
@@ -430,7 +458,7 @@ export function PitchDetail() {
                   </div>
                 </CardHeader>
                 <CardBody className="space-y-4">
-                  {isOwner ? (
+                  {canEdit ? (
                     <>
                       <div>
                         <Label>Pitch (markdown)</Label>

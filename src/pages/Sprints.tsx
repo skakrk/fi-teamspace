@@ -18,6 +18,8 @@ import {
 } from '@/lib/supabase';
 import { Target } from 'lucide-react';
 import { notifyError } from '@/lib/notify';
+import { canProxy, isProxyFilled } from '@/lib/presidentMode';
+import { ProxyBadge } from '@/components/shared/ProxyBadge';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   not_started: 'Not started',
@@ -35,6 +37,8 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
 export function Sprints() {
   const { profiles } = useTeam();
   const { user } = useAuth();
+  const myProfile = profiles.find((p) => p.user_id === user?.id);
+  const iAmPresident = !!myProfile?.is_president;
   const [sprints, setSprints] = useState<DbSprint[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<DbSprintTask[]>([]);
@@ -100,6 +104,7 @@ export function Sprints() {
       const { error } = await supabase.from('sprint_completions').insert({
         sprint_id: activeId,
         user_id: user.id,
+        filled_by: user.id,
       });
       if (error) return notifyError('Could not mark completion', error);
     }
@@ -129,13 +134,20 @@ export function Sprints() {
   }
 
   async function cycleStatus(taskId: string, userId: string) {
-    if (!user || user.id !== userId) return;
+    if (!user) return;
+    const cell = progress.find((x) => x.task_id === taskId && x.user_id === userId);
+    const isOwner = user.id === userId;
+    const isPresidentProxy = iAmPresident && canProxy(cell);
+    if (!isOwner && !isPresidentProxy) return;
     const order: TaskStatus[] = ['not_started', 'in_progress', 'done', 'blocked'];
     const cur = statusOf(taskId, userId);
     const next = order[(order.indexOf(cur) + 1) % order.length];
     await supabase
       .from('task_progress')
-      .upsert({ task_id: taskId, user_id: userId, status: next }, { onConflict: 'task_id,user_id' });
+      .upsert(
+        { task_id: taskId, user_id: userId, status: next, filled_by: user.id },
+        { onConflict: 'task_id,user_id' },
+      );
     await loadTasks();
   }
 
@@ -315,25 +327,45 @@ export function Sprints() {
                           )}
                         </td>
                         {profiles.map((p) => {
+                          const cell = progress.find(
+                            (x) => x.task_id === t.id && x.user_id === p.user_id,
+                          );
                           const s = statusOf(t.id, p.user_id);
                           const mine = user?.id === p.user_id;
+                          const proxyAllowed = !mine && iAmPresident && canProxy(cell);
+                          const editable = mine || proxyAllowed;
                           return (
                             <td key={p.user_id} className="px-2 py-2 align-top">
                               <button
-                                disabled={!mine}
+                                disabled={!editable}
                                 onClick={() => cycleStatus(t.id, p.user_id)}
                                 className={
                                   'w-full px-2 py-1.5 rounded-md text-xs border ' +
                                   STATUS_COLOR[s] +
-                                  (mine ? ' hover:shadow-card cursor-pointer' : ' cursor-default opacity-90')
+                                  (editable
+                                    ? ' hover:shadow-card cursor-pointer'
+                                    : ' cursor-default opacity-90')
                                 }
-                                title={mine ? 'Click to change' : 'Read-only'}
+                                title={
+                                  mine
+                                    ? 'Click to change'
+                                    : proxyAllowed
+                                    ? 'Click to fill on behalf'
+                                    : 'Read-only'
+                                }
                               >
                                 <span className="inline-flex items-center gap-1">
                                   {s === 'done' && <Check size={12} />}
                                   {STATUS_LABEL[s]}
                                 </span>
                               </button>
+                              {isProxyFilled(cell) && (
+                                <div className="mt-1">
+                                  <ProxyBadge fillerName={
+                                    profiles.find((x) => x.user_id === cell?.filled_by)?.full_name ?? null
+                                  } />
+                                </div>
+                              )}
                             </td>
                           );
                         })}
