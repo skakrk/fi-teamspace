@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input, Label } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,9 +7,26 @@ import { Logo } from '@/components/shared/Logo';
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
+function initialModeFromUrl(pathname: string, search: string): Mode {
+  if (pathname === '/register' || pathname === '/signup') return 'signup';
+  const params = new URLSearchParams(search);
+  const m = params.get('mode');
+  if (m === 'signup' || m === 'forgot') return m;
+  return 'signin';
+}
+
 export function Login() {
   const { signIn, signUp, sendPasswordReset } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
+  const location = useLocation();
+  const [mode, setMode] = useState<Mode>(() =>
+    initialModeFromUrl(location.pathname, location.search),
+  );
+
+  // Keep mode in sync when navigating between /login ↔ /register ↔ /signup
+  // (the same component is reused for all three, so it doesn't remount).
+  useEffect(() => {
+    setMode(initialModeFromUrl(location.pathname, location.search));
+  }, [location.pathname, location.search]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');

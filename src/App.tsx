@@ -50,6 +50,8 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Login />} />
+        <Route path="/signup" element={<Login />} />
         <Route path="/auth/reset" element={<ResetPassword />} />
         <Route path="/security" element={<Security />} />
         <Route path="/guide" element={<UserGuide />} />
