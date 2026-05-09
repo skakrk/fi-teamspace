@@ -22,6 +22,8 @@ import { CourseProgress } from '@/pages/CourseProgress';
 import { CohortPresent } from '@/pages/CohortPresent';
 import { SharePresent } from '@/pages/SharePresent';
 import { Admin } from '@/pages/Admin';
+import { President } from '@/pages/President';
+import { TeammateProfile } from '@/pages/TeammateProfile';
 import { ConfigBanner } from '@/components/shared/ConfigBanner';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import type { ReactNode } from 'react';
@@ -95,6 +97,11 @@ export function App() {
         <Route path="/progress" element={<Guarded label="Course progress"><CourseProgress /></Guarded>} />
         <Route path="/resources" element={<Guarded label="Resources"><Resources /></Guarded>} />
         <Route path="/admin" element={<Guarded label="Admin"><Admin /></Guarded>} />
+        <Route path="/president" element={<Guarded label="President Inbox"><President /></Guarded>} />
+        <Route
+          path="/president/profile/:userId"
+          element={<Guarded label="Teammate profile (proxy)"><TeammateProfile /></Guarded>}
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

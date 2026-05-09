@@ -41,6 +41,7 @@ export function MyProfile() {
           user_id: user.id,
           full_name: (user.user_metadata?.full_name as string) || user.email?.split('@')[0] || '',
           email: user.email,
+          filled_by: user.id,
         })
         .select()
         .single();
@@ -75,12 +76,12 @@ export function MyProfile() {
     // Persist immediately so the user doesn't lose the upload
     await supabase
       .from('profiles')
-      .update({ [field]: result.url, updated_at: new Date().toISOString() })
+      .update({ [field]: result.url, filled_by: user.id, updated_at: new Date().toISOString() })
       .eq('user_id', user.id);
   }
 
   async function save() {
-    if (!p) return;
+    if (!p || !user) return;
     setSaving(true);
     const { error } = await supabase
       .from('profiles')
@@ -104,6 +105,7 @@ export function MyProfile() {
         twitter: p.twitter,
         telegram: p.telegram,
         website: p.website,
+        filled_by: user.id,
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', p.user_id);

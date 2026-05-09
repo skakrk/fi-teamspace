@@ -25,10 +25,11 @@ import {
   latestSnapshotDate,
   rowsForDate,
 } from '@/lib/standings';
-import { LayoutDashboard, Megaphone, CalendarClock, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Megaphone, CalendarClock, Briefcase, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
 import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
+import { isOwnerFilled } from '@/lib/presidentMode';
 
 const OUR_TEAM = 'Breakers Team';
 
@@ -360,6 +361,50 @@ export function Dashboard() {
               </div>
               <Link to="/profile">
                 <Button>Fill in profile →</Button>
+              </Link>
+            </CardBody>
+          </Card>
+        );
+      })()}
+
+      {iAmPresident && (() => {
+        const others = profiles.filter((p) => p.user_id !== user?.id);
+        const profileGaps = others.filter((p) => !isOwnerFilled(p)).length;
+        const pitchGaps = others.filter((p) => {
+          const latest = latestPitchByUser[p.user_id];
+          return !latest || !isOwnerFilled(latest);
+        }).length;
+        const reflectionGaps = meeting
+          ? others.filter((p) => {
+              const u = meetingUpdates.find((x) => x.user_id === p.user_id);
+              return !u || !isOwnerFilled(u);
+            }).length
+          : 0;
+        const sprintGaps = others.filter((p) => {
+          const ownerFilled = progress.some(
+            (x) => x.user_id === p.user_id && x.filled_by === p.user_id && x.status !== 'not_started',
+          );
+          return !ownerFilled;
+        }).length;
+        const total = profileGaps + pitchGaps + reflectionGaps + sprintGaps;
+        if (!total) return null;
+        return (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardBody className="flex items-start gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-ink flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-warn" /> President Inbox — gaps to close
+                </div>
+                <div className="text-sm text-muted mt-1">
+                  {profileGaps > 0 && <span className="mr-3">{profileGaps} profile</span>}
+                  {pitchGaps > 0 && <span className="mr-3">{pitchGaps} pitch</span>}
+                  {reflectionGaps > 0 && <span className="mr-3">{reflectionGaps} reflection</span>}
+                  {sprintGaps > 0 && <span className="mr-3">{sprintGaps} sprint</span>}
+                  <span className="text-xs">— teammates not filling these themselves yet.</span>
+                </div>
+              </div>
+              <Link to="/president">
+                <Button>Open President Inbox →</Button>
               </Link>
             </CardBody>
           </Card>
