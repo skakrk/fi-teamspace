@@ -6,16 +6,39 @@ import { Textarea } from '@/components/ui/Input';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { notifyError } from '@/lib/notify';
 
+// FI Deliverables URL pattern is `https://fi.co/enrolled/assignments/<slug>`
+// where the slug is the sprint name lowercased, with `&` and other punctuation
+// stripped, spaces collapsed to hyphens, then suffixed with the cohort
+// identifier. Hardcoded to CEE 2026 since this app is built for that team.
+const FI_COHORT_SUFFIX = 'central-eastern-europe-2026';
+
+export function fiAssignmentUrl(sprintName: string | null | undefined): string | null {
+  if (!sprintName) return null;
+  const slug = sprintName
+    .toLowerCase()
+    .replace(/&/g, ' ')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+  if (!slug) return null;
+  return `https://fi.co/enrolled/assignments/${slug}-${FI_COHORT_SUFFIX}`;
+}
+
 export function defaultWaSyncTemplate(
   sprintName: string | null | undefined,
   presidentName: string | null | undefined,
 ) {
   const title = sprintName ? sprintName : 'this week';
   const signature = (presidentName && presidentName.trim()) || 'President';
+  const url = fiAssignmentUrl(sprintName);
+  const pitchLine = url
+    ? `🎤 Was your Feedback Pitch ready this session, and marked Ready in Deliverables ${url}?`
+    : '🎤 Was your Feedback Pitch ready this session, and marked Ready in Deliverables?';
   return [
     `Hi team! Quick sync about ${title} before I share our sprint results with the Local Director:`,
     '',
-    '🎤 Was your Feedback Pitch ready this session, and marked Ready in Best Teamspace?',
+    pitchLine,
     '⏱️ Any feedback on pitch timing this week?',
     '🚧 Wins, concerns or blockers I should flag to the Director?',
     '',
