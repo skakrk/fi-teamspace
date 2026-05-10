@@ -253,7 +253,7 @@ export function President() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="h1 flex items-center gap-2">
-            <ShieldCheck className="text-primary-dark" size={22} /> President Inbox
+            <ShieldCheck className="text-primary-dark" size={22} /> Manage team
           </h1>
           <p className="muted text-sm mt-1">
             Where each teammate stands across profile, pitch, last reflection and current sprint.

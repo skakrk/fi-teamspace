@@ -74,7 +74,7 @@ export function TeammateProfile() {
     return (
       <div className="space-y-4">
         <Link to="/president" className="text-sm text-muted hover:text-ink">
-          ← Back to President Inbox
+          ← Back to Manage team
         </Link>
         <Card>
           <CardBody>
@@ -129,7 +129,7 @@ export function TeammateProfile() {
   return (
     <div className="space-y-6 max-w-3xl">
       <Link to="/president" className="text-sm text-muted hover:text-ink">
-        ← Back to President Inbox
+        ← Back to Manage team
       </Link>
 
       <div className="flex items-center gap-3">

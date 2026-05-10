@@ -45,7 +45,7 @@ export function AppShell() {
   const navItems: NavItem[] = [
     ...NAV,
     ...(iAmPresident
-      ? [{ to: '/president', label: 'President Inbox', icon: ShieldCheck } as NavItem]
+      ? [{ to: '/president', label: 'Manage team', icon: ShieldCheck } as NavItem]
       : []),
     ...(isAdmin(user) ? [{ to: '/admin', label: 'Admin', icon: Shield } as NavItem] : []),
   ];
