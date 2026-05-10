@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
 import { Briefcase, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
@@ -141,6 +142,9 @@ export function PresidentChecklist({
     }
   }
 
+  // FI Working Group meetings (and therefore president duties) start in W2.
+  // W0 (Onboarding) and W1 (Accelerator Kickoff) precede them — no checklist.
+  const isPreWorkingGroup = (selectedSprint?.week_number ?? 99) < 2;
   const total = PRESIDENT_RESPONSIBILITIES.length;
   const doneCount = PRESIDENT_RESPONSIBILITIES.filter((r) =>
     items.find((i) => i.item_code === r.code && i.done),
@@ -159,31 +163,21 @@ export function PresidentChecklist({
         </CardTitle>
         <div className="flex items-center gap-3 flex-wrap">
           {sprintsForPicker.length > 0 ? (
-            <div className="relative">
-              <select
-                value={selectedSprintId ?? ''}
-                onChange={(e) => setSelectedSprintId(e.target.value || null)}
-                className="appearance-none h-8 rounded-lg border border-border bg-white text-ink font-medium pl-3 pr-8 text-xs hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer transition-colors"
-                aria-label="Choose sprint"
-              >
-                {sprintsForPicker.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    W{s.week_number} · {s.name}
-                    {s.is_current ? ' (current)' : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={12}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-              />
-            </div>
+            <SprintPicker
+              sprints={sprintsForPicker}
+              value={selectedSprintId}
+              onChange={setSelectedSprintId}
+            />
           ) : (
             <span className="text-xs text-muted">No sprint</span>
           )}
-          <span className="text-xs text-muted">
-            <strong className="text-ink">{doneCount}</strong> / {total} done
-          </span>
+          {isPreWorkingGroup ? (
+            <span className="text-xs text-muted italic">no duties</span>
+          ) : (
+            <span className="text-xs text-muted">
+              <strong className="text-ink">{doneCount}</strong> / {total} done
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
@@ -201,6 +195,12 @@ export function PresidentChecklist({
           {!selectedSprint ? (
             <p className="text-sm text-muted">
               No active sprint — start one in <a className="text-primary-dark hover:underline" href="#/sprints">Sprints</a> to track checklist progress.
+            </p>
+          ) : isPreWorkingGroup ? (
+            <p className="text-sm text-muted">
+              Working Group meetings haven't started yet — no president duties for{' '}
+              <strong className="text-ink">{selectedSprint.name}</strong>. The checklist
+              becomes active from W2 onwards.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
@@ -238,5 +238,75 @@ export function PresidentChecklist({
         </CardBody>
       )}
     </Card>
+  );
+}
+
+function SprintPicker({
+  sprints,
+  value,
+  onChange,
+}: {
+  sprints: DbSprint[];
+  value: string | null;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = sprints.find((s) => s.id === value) ?? null;
+  const label = selected
+    ? `W${selected.week_number} · ${selected.name}${selected.is_current ? ' (current)' : ''}`
+    : 'Choose sprint';
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-between gap-2 h-8 rounded-lg border border-border bg-white text-ink font-medium px-3 text-xs hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer transition-colors min-w-[200px]"
+          aria-label="Choose sprint"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDown size={12} className="text-muted shrink-0" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={6}
+          className="z-50 w-64 max-h-80 overflow-auto bg-surface border border-border rounded-xl shadow-pop p-1 animate-in fade-in-0 zoom-in-95"
+        >
+          {sprints.map((s) => {
+            const isSel = s.id === value;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  onChange(s.id);
+                  setOpen(false);
+                }}
+                className={
+                  'w-full flex items-center gap-2 px-2.5 py-1.5 text-left rounded-md text-xs transition-colors ' +
+                  (isSel
+                    ? 'bg-bubble text-primary-deep font-semibold'
+                    : 'text-ink hover:bg-bg')
+                }
+              >
+                <span className="w-5 shrink-0">
+                  {isSel && <Check size={12} className="text-primary-deep" />}
+                </span>
+                <span className="truncate">
+                  W{s.week_number} · {s.name}
+                </span>
+                {s.is_current && (
+                  <span className="ml-auto text-[10px] uppercase tracking-wider text-primary-dark font-medium">
+                    current
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
