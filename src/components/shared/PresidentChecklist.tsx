@@ -141,6 +141,9 @@ export function PresidentChecklist({
     }
   }
 
+  // FI Working Group meetings (and therefore president duties) start in W2.
+  // W0 (Onboarding) and W1 (Accelerator Kickoff) precede them — no checklist.
+  const isPreWorkingGroup = (selectedSprint?.week_number ?? 99) < 2;
   const total = PRESIDENT_RESPONSIBILITIES.length;
   const doneCount = PRESIDENT_RESPONSIBILITIES.filter((r) =>
     items.find((i) => i.item_code === r.code && i.done),
@@ -181,9 +184,13 @@ export function PresidentChecklist({
           ) : (
             <span className="text-xs text-muted">No sprint</span>
           )}
-          <span className="text-xs text-muted">
-            <strong className="text-ink">{doneCount}</strong> / {total} done
-          </span>
+          {isPreWorkingGroup ? (
+            <span className="text-xs text-muted italic">no duties</span>
+          ) : (
+            <span className="text-xs text-muted">
+              <strong className="text-ink">{doneCount}</strong> / {total} done
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
@@ -201,6 +208,12 @@ export function PresidentChecklist({
           {!selectedSprint ? (
             <p className="text-sm text-muted">
               No active sprint — start one in <a className="text-primary-dark hover:underline" href="#/sprints">Sprints</a> to track checklist progress.
+            </p>
+          ) : isPreWorkingGroup ? (
+            <p className="text-sm text-muted">
+              Working Group meetings haven't started yet — no president duties for{' '}
+              <strong className="text-ink">{selectedSprint.name}</strong>. The checklist
+              becomes active from W2 onwards.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
