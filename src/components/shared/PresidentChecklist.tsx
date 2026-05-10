@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
@@ -20,6 +20,8 @@ export function PresidentChecklist({
 }) {
   const [items, setItems] = useState<DbPresidentChecklist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(sprint?.id ?? null);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(COLLAPSED_KEY) === '1';
@@ -27,6 +29,41 @@ export function PresidentChecklist({
       return false;
     }
   });
+
+  // Load full sprint list once for the switcher.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from('sprints')
+        .select('*')
+        .order('week_number', { ascending: true });
+      if (!alive) return;
+      const list = (data as DbSprint[]) || [];
+      setAllSprints(list);
+      // If parent never passed a sprint, fall back to current → latest
+      if (!selectedSprintId) {
+        const cur = list.find((s) => s.is_current) ?? list[list.length - 1] ?? null;
+        if (cur) setSelectedSprintId(cur.id);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep our selection in sync with the parent's "current sprint" — but only
+  // until the user explicitly picks something else (parent prop changes).
+  useEffect(() => {
+    if (sprint?.id && !selectedSprintId) setSelectedSprintId(sprint.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sprint?.id]);
+
+  const selectedSprint = useMemo(
+    () => allSprints.find((s) => s.id === selectedSprintId) ?? sprint ?? null,
+    [allSprints, selectedSprintId, sprint],
+  );
 
   useEffect(() => {
     try {
@@ -37,7 +74,7 @@ export function PresidentChecklist({
   }, [collapsed]);
 
   useEffect(() => {
-    if (!sprint) {
+    if (!selectedSprint) {
       setItems([]);
       setLoading(false);
       return;
@@ -48,7 +85,7 @@ export function PresidentChecklist({
       const { data, error } = await supabase
         .from('president_checklist')
         .select('*')
-        .eq('sprint_id', sprint.id);
+        .eq('sprint_id', selectedSprint.id);
       if (!alive) return;
       if (error) {
         notifyError('Could not load president checklist', error);
@@ -61,15 +98,15 @@ export function PresidentChecklist({
     return () => {
       alive = false;
     };
-  }, [sprint?.id]);
+  }, [selectedSprint?.id]);
 
   async function toggle(itemCode: string) {
-    if (!sprint) return;
+    if (!selectedSprint) return;
     const existing = items.find((i) => i.item_code === itemCode);
     const nextDone = !(existing?.done ?? false);
     // Optimistic update
     const optimistic: DbPresidentChecklist = {
-      sprint_id: sprint.id,
+      sprint_id: selectedSprint.id,
       item_code: itemCode,
       done: nextDone,
       done_at: nextDone ? new Date().toISOString() : null,
@@ -84,7 +121,7 @@ export function PresidentChecklist({
     });
     const { error } = await supabase.from('president_checklist').upsert(
       {
-        sprint_id: sprint.id,
+        sprint_id: selectedSprint.id,
         item_code: itemCode,
         done: nextDone,
         done_at: nextDone ? new Date().toISOString() : null,
@@ -108,16 +145,36 @@ export function PresidentChecklist({
   const doneCount = PRESIDENT_RESPONSIBILITIES.filter((r) =>
     items.find((i) => i.item_code === r.code && i.done),
   ).length;
-  const sprintLabel = sprint ? `Sprint W${sprint.week_number}` : 'No active sprint';
+  // Sort sprints newest first so the dropdown's most-recent options surface
+  const sprintsForPicker = useMemo(
+    () => [...allSprints].sort((a, b) => b.week_number - a.week_number),
+    [allSprints],
+  );
 
   return (
     <Card className="border-primary/40 bg-bubble/30">
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader className="flex items-center justify-between gap-3 flex-wrap">
         <CardTitle className="flex items-center gap-2">
-          <Briefcase size={18} className="text-primary-deep" /> President checklist —{' '}
-          {sprintLabel}
+          <Briefcase size={18} className="text-primary-deep" /> President checklist
         </CardTitle>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {sprintsForPicker.length > 0 ? (
+            <select
+              value={selectedSprintId ?? ''}
+              onChange={(e) => setSelectedSprintId(e.target.value || null)}
+              className="h-8 rounded-md border border-border bg-white text-ink px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+              aria-label="Choose sprint"
+            >
+              {sprintsForPicker.map((s) => (
+                <option key={s.id} value={s.id}>
+                  W{s.week_number} · {s.name}
+                  {s.is_current ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs text-muted">No sprint</span>
+          )}
           <span className="text-xs text-muted">
             <strong className="text-ink">{doneCount}</strong> / {total} done
           </span>
@@ -135,7 +192,7 @@ export function PresidentChecklist({
       </CardHeader>
       {!collapsed && (
         <CardBody>
-          {!sprint ? (
+          {!selectedSprint ? (
             <p className="text-sm text-muted">
               No active sprint — start one in <a className="text-primary-dark hover:underline" href="#/sprints">Sprints</a> to track checklist progress.
             </p>
