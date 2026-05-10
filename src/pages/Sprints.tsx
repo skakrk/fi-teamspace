@@ -91,19 +91,31 @@ export function Sprints() {
   }
 
   async function toggleSprintComplete() {
+    if (!user) return;
+    return toggleSprintCompleteFor(user.id);
+  }
+
+  async function toggleSprintCompleteFor(targetUserId: string) {
     if (!user || !activeId) return;
-    const mine = completions.find((c) => c.user_id === user.id);
-    if (mine) {
+    const isOwner = user.id === targetUserId;
+    const existing = completions.find((c) => c.user_id === targetUserId);
+    if (existing) {
+      // Removing: owner can always remove; president can only remove rows
+      // they (or another proxy) created — never owner-filled ones.
+      if (!isOwner && !iAmPresident) return;
+      if (!isOwner && existing.filled_by === existing.user_id) return;
       const { error } = await supabase
         .from('sprint_completions')
         .delete()
         .eq('sprint_id', activeId)
-        .eq('user_id', user.id);
+        .eq('user_id', targetUserId);
       if (error) return notifyError('Could not unmark completion', error);
     } else {
+      // Marking: owner marks self; president can proxy anyone.
+      if (!isOwner && !iAmPresident) return;
       const { error } = await supabase.from('sprint_completions').insert({
         sprint_id: activeId,
-        user_id: user.id,
+        user_id: targetUserId,
         filled_by: user.id,
       });
       if (error) return notifyError('Could not mark completion', error);
@@ -269,25 +281,65 @@ export function Sprints() {
               <span className="font-medium text-ink">
                 {completions.length}/{profiles.length}
               </span>
-              {profiles.length > 0 && completions.length > 0 && (
+              {profiles.length > 0 && (
                 <div className="flex gap-1 ml-1">
-                  {profiles
-                    .filter((p) => completions.some((c) => c.user_id === p.user_id))
-                    .map((p) => (
-                      <span
+                  {profiles.map((p) => {
+                    const completion = completions.find((c) => c.user_id === p.user_id);
+                    const isOwner = user?.id === p.user_id;
+                    const ownerFilled = completion && completion.filled_by === completion.user_id;
+                    const proxyFilled = completion && completion.filled_by !== completion.user_id;
+                    const canEdit = isOwner || (iAmPresident && !ownerFilled);
+                    const initials = (p.full_name || '?')
+                      .split(' ')
+                      .map((s) => s[0])
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+                    let title = p.full_name || 'Unnamed';
+                    if (completion) {
+                      title += proxyFilled
+                        ? ` — completed (filled on behalf)`
+                        : ` — completed`;
+                    } else {
+                      title += ' — not completed';
+                    }
+                    if (canEdit) {
+                      title += completion
+                        ? ' · click to unmark'
+                        : ' · click to mark complete';
+                    } else if (!isOwner && !iAmPresident) {
+                      title += ' · read-only';
+                    } else if (ownerFilled && !isOwner) {
+                      title += ' · they marked this themselves';
+                    }
+                    const baseClasses =
+                      'inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold transition-colors relative';
+                    const stateClasses = completion
+                      ? 'bg-bubble text-primary-deep border border-primary/40'
+                      : 'bg-white text-muted border border-border opacity-70';
+                    const interactiveClasses = canEdit
+                      ? ' cursor-pointer hover:shadow-card hover:opacity-100'
+                      : ' cursor-default';
+                    return (
+                      <button
                         key={p.user_id}
-                        title={p.full_name}
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-bubble text-primary-deep text-[10px] font-semibold"
+                        type="button"
+                        title={title}
+                        disabled={!canEdit}
+                        onClick={() => toggleSprintCompleteFor(p.user_id)}
+                        className={baseClasses + ' ' + stateClasses + interactiveClasses}
                       >
-                        {(p.full_name || '?')
-                          .split(' ')
-                          .map((s) => s[0])
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .join('')
-                          .toUpperCase()}
-                      </span>
-                    ))}
+                        {initials}
+                        {proxyFilled && (
+                          <span
+                            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-warn border border-white"
+                            aria-hidden
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
