@@ -11,6 +11,7 @@ import {
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
 import { WhatsAppSyncDialog } from '@/components/shared/WhatsAppSyncDialog';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { useProfile } from '@/hooks/useTeam';
 import { notifyError } from '@/lib/notify';
 
 const COLLAPSED_KEY = 'fi-teamspace:presidentChecklist:collapsed';
@@ -22,6 +23,7 @@ export function PresidentChecklist({
   sprint: DbSprint | null;
   currentUserId: string;
 }) {
+  const { profile: myProfile } = useProfile(currentUserId);
   const [items, setItems] = useState<DbPresidentChecklist[]>([]);
   const [loading, setLoading] = useState(true);
   const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
@@ -287,6 +289,7 @@ export function PresidentChecklist({
           onOpenChange={setWaSyncOpen}
           whatsappUrl={whatsappUrl}
           sprintName={selectedSprint?.name ?? null}
+          presidentName={myProfile?.full_name ?? null}
         />
       )}
     </Card>
