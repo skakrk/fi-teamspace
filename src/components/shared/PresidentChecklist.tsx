@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import * as Popover from '@radix-ui/react-popover';
 import { Briefcase, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -8,6 +9,8 @@ import {
   type DbSprint,
 } from '@/lib/supabase';
 import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
+import { WhatsAppSyncDialog } from '@/components/shared/WhatsAppSyncDialog';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { notifyError } from '@/lib/notify';
 
 const COLLAPSED_KEY = 'fi-teamspace:presidentChecklist:collapsed';
@@ -23,6 +26,8 @@ export function PresidentChecklist({
   const [loading, setLoading] = useState(true);
   const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(sprint?.id ?? null);
+  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null);
+  const [waSyncOpen, setWaSyncOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(COLLAPSED_KEY) === '1';
@@ -52,6 +57,22 @@ export function PresidentChecklist({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load the team's WhatsApp group URL once for the sync button.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from('team_vision')
+        .select('whatsapp_group_url')
+        .eq('id', 1)
+        .maybeSingle();
+      if (alive) setWhatsappUrl((data?.whatsapp_group_url as string | null) ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Keep our selection in sync with the parent's "current sprint" — but only
@@ -203,39 +224,70 @@ export function PresidentChecklist({
               becomes active from W2 onwards.
             </p>
           ) : (
-            <ul className="space-y-2 text-sm">
-              {PRESIDENT_RESPONSIBILITIES.map((r, i) => {
-                const item = items.find((x) => x.item_code === r.code);
-                const isDone = !!item?.done;
-                return (
-                  <li key={r.code}>
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => toggle(r.code)}
-                      className={
-                        'w-full flex items-start gap-2 text-left rounded-md px-2 py-1.5 transition-colors hover:bg-white/60 disabled:opacity-60 disabled:cursor-wait'
-                      }
-                    >
-                      <span
+            <>
+              <ul className="space-y-2 text-sm">
+                {PRESIDENT_RESPONSIBILITIES.map((r, i) => {
+                  const item = items.find((x) => x.item_code === r.code);
+                  const isDone = !!item?.done;
+                  return (
+                    <li key={r.code}>
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => toggle(r.code)}
                         className={
-                          'w-5 h-5 rounded-md grid place-items-center flex-shrink-0 mt-0.5 border transition-colors ' +
-                          (isDone
-                            ? 'bg-primary border-primary text-white'
-                            : 'bg-white border-border text-muted')
+                          'w-full flex items-start gap-2 text-left rounded-md px-2 py-1.5 transition-colors hover:bg-white/60 disabled:opacity-60 disabled:cursor-wait'
                         }
-                        aria-hidden
                       >
-                        {isDone ? <Check size={12} /> : <span className="text-[10px] font-semibold">{i + 1}</span>}
-                      </span>
-                      <span className={isDone ? 'line-through text-muted' : ''}>{r.label}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        <span
+                          className={
+                            'w-5 h-5 rounded-md grid place-items-center flex-shrink-0 mt-0.5 border transition-colors ' +
+                            (isDone
+                              ? 'bg-primary border-primary text-white'
+                              : 'bg-white border-border text-muted')
+                          }
+                          aria-hidden
+                        >
+                          {isDone ? <Check size={12} /> : <span className="text-[10px] font-semibold">{i + 1}</span>}
+                        </span>
+                        <span className={isDone ? 'line-through text-muted' : ''}>{r.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="mt-4 pt-3 border-t border-border/60">
+                {whatsappUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => setWaSyncOpen(true)}
+                    className="inline-flex items-center gap-2 h-8 px-3 rounded-lg bg-[#25D366] text-white text-xs font-medium hover:bg-[#128C7E] transition-colors shadow-card"
+                  >
+                    <WhatsAppIcon width={14} height={14} />
+                    Ask team about pitches & blockers
+                  </button>
+                ) : (
+                  <p className="text-xs text-muted">
+                    Set the team's WhatsApp group URL on the{' '}
+                    <Link to="/team" className="text-primary-dark hover:underline">
+                      Team page
+                    </Link>{' '}
+                    to enable quick sync.
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </CardBody>
+      )}
+      {whatsappUrl && (
+        <WhatsAppSyncDialog
+          open={waSyncOpen}
+          onOpenChange={setWaSyncOpen}
+          whatsappUrl={whatsappUrl}
+          sprintName={selectedSprint?.name ?? null}
+        />
       )}
     </Card>
   );
