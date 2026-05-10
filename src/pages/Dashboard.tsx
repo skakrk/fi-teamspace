@@ -393,7 +393,7 @@ export function Dashboard() {
             <CardBody className="flex items-start gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-ink flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-warn" /> Manage team — gaps to close
+                  <ShieldCheck size={16} className="text-warn" /> Teammates — gaps to close
                 </div>
                 <div className="text-sm text-muted mt-1">
                   {profileGaps > 0 && <span className="mr-3">{profileGaps} profile</span>}
@@ -404,7 +404,7 @@ export function Dashboard() {
                 </div>
               </div>
               <Link to="/president">
-                <Button>Manage team →</Button>
+                <Button>Open Teammates →</Button>
               </Link>
             </CardBody>
           </Card>
