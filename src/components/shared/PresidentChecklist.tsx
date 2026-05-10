@@ -159,19 +159,25 @@ export function PresidentChecklist({
         </CardTitle>
         <div className="flex items-center gap-3 flex-wrap">
           {sprintsForPicker.length > 0 ? (
-            <select
-              value={selectedSprintId ?? ''}
-              onChange={(e) => setSelectedSprintId(e.target.value || null)}
-              className="h-8 rounded-md border border-border bg-white text-ink px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
-              aria-label="Choose sprint"
-            >
-              {sprintsForPicker.map((s) => (
-                <option key={s.id} value={s.id}>
-                  W{s.week_number} · {s.name}
-                  {s.is_current ? ' (current)' : ''}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedSprintId ?? ''}
+                onChange={(e) => setSelectedSprintId(e.target.value || null)}
+                className="appearance-none h-8 rounded-lg border border-border bg-white text-ink font-medium pl-3 pr-8 text-xs hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer transition-colors"
+                aria-label="Choose sprint"
+              >
+                {sprintsForPicker.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    W{s.week_number} · {s.name}
+                    {s.is_current ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={12}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+              />
+            </div>
           ) : (
             <span className="text-xs text-muted">No sprint</span>
           )}
