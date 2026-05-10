@@ -32,19 +32,20 @@ export function defaultWaSyncTemplate(
   const title = sprintName ? sprintName : 'this week';
   const signature = (presidentName && presidentName.trim()) || 'President';
   const url = fiAssignmentUrl(sprintName);
-  const pitchLine = url
-    ? `🎤 Was your Feedback Pitch ready this session, and marked Ready in Deliverables ${url}?`
-    : '🎤 Was your Feedback Pitch ready this session, and marked Ready in Deliverables?';
-  return [
+  const lines = [
     `Hi team! Quick sync about ${title} before I share our sprint results with the Local Director:`,
     '',
-    pitchLine,
+    '🎤 Was your Feedback Pitch ready this session, and marked Ready in Deliverables?',
+  ];
+  if (url) lines.push(`   → ${url}`);
+  lines.push(
     '⏱️ Any feedback on pitch timing this week?',
     '🚧 Wins, concerns or blockers I should flag to the Director?',
     '',
     'Drop a quick reply so I can roll it into the report. Thanks!',
     signature,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 export function WhatsAppSyncDialog({
@@ -62,6 +63,7 @@ export function WhatsAppSyncDialog({
 }) {
   const [text, setText] = useState(() => defaultWaSyncTemplate(sprintName, presidentName));
   const [copied, setCopied] = useState(false);
+  const deliverableUrl = fiAssignmentUrl(sprintName);
 
   // Refresh template when the dialog opens for a different sprint or
   // president, but don't blow away mid-edit text on every prop change.
@@ -111,6 +113,21 @@ export function WhatsAppSyncDialog({
       }
     >
       <div className="space-y-3">
+        {deliverableUrl && (
+          <div className="text-xs text-muted">
+            Deliverables for{' '}
+            <a
+              href={deliverableUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-dark hover:underline font-medium"
+            >
+              {sprintName ?? 'this sprint'}
+              <ExternalLink size={11} className="inline-block ml-0.5 -mt-0.5" />
+            </a>{' '}
+            — same URL is included in the message below so the team can click through.
+          </div>
+        )}
         <Textarea
           rows={10}
           value={text}
