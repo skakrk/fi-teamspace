@@ -16,7 +16,10 @@ import { computeStandings, latestSnapshotDate, rowsForDate } from '@/lib/standin
 import { whatsappLink } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { DiscordIcon } from '@/components/icons/DiscordIcon';
 import { Linkedin, MessageCircle } from 'lucide-react';
+
+const FI_DISCORD_URL = 'https://discord.gg/wF4sZmayu';
 import { PresidentRoleCard } from '@/components/shared/PresidentRole';
 import { Badge } from '@/components/ui/Badge';
 import { Trophy } from 'lucide-react';
@@ -182,19 +185,30 @@ export function Team() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted mb-1">WhatsApp group</div>
-                {vision?.whatsapp_group_url ? (
+                <div className="text-xs text-muted mb-1">Team channels</div>
+                <div className="flex flex-wrap gap-2">
+                  {vision?.whatsapp_group_url ? (
+                    <a
+                      href={vision.whatsapp_group_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#25D366] text-white text-sm font-medium hover:bg-[#128C7E]"
+                    >
+                      <WhatsAppIcon /> Open WhatsApp group
+                    </a>
+                  ) : (
+                    <span className="text-sm text-muted">— add your WhatsApp group invite link —</span>
+                  )}
                   <a
-                    href={vision.whatsapp_group_url}
+                    href={FI_DISCORD_URL}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#25D366] text-white text-sm font-medium hover:bg-[#128C7E]"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5865F2] text-white text-sm font-medium hover:bg-[#4752C4]"
+                    title="Founder Institute Discord (cohort-wide)"
                   >
-                    <WhatsAppIcon /> Open WhatsApp group
+                    <DiscordIcon /> Open FI Discord
                   </a>
-                ) : (
-                  <span className="text-sm text-muted">— add your group invite link —</span>
-                )}
+                </div>
               </div>
             </div>
           )}
