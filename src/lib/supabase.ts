@@ -36,6 +36,8 @@ export type DbProfile = {
   website: string | null;
   is_president: boolean;
   is_placeholder: boolean;
+  is_dropped_out: boolean;
+  dropped_out_at: string | null;
   filled_by: string | null;
   created_at: string;
   updated_at: string;

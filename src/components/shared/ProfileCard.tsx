@@ -57,6 +57,11 @@ export function ProfileCard({
               placeholder
             </Badge>
           )}
+          {profile.is_dropped_out && (
+            <Badge tone="bad" title="No longer in the cohort">
+              dropped out
+            </Badge>
+          )}
         </div>
         {effectivePhone && (
           <div className="text-sm text-muted flex items-center gap-1">
