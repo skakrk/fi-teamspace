@@ -199,6 +199,14 @@ export type DbSprintCompletion = {
   filled_by: string | null;
 };
 
+export type DbPresidentChecklist = {
+  sprint_id: string;
+  item_code: string;
+  done: boolean;
+  done_at: string | null;
+  done_by: string | null;
+};
+
 export type DbProjectFeedback = {
   id: string;
   founder_id: string;

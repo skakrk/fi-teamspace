@@ -1,0 +1,242 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Briefcase, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import {
+  supabase,
+  type DbPresidentChecklist,
+  type DbSprint,
+} from '@/lib/supabase';
+import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
+import { notifyError } from '@/lib/notify';
+
+const COLLAPSED_KEY = 'fi-teamspace:presidentChecklist:collapsed';
+
+export function PresidentChecklist({
+  sprint,
+  currentUserId,
+}: {
+  sprint: DbSprint | null;
+  currentUserId: string;
+}) {
+  const [items, setItems] = useState<DbPresidentChecklist[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [allSprints, setAllSprints] = useState<DbSprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(sprint?.id ?? null);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  // Load full sprint list once for the switcher.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from('sprints')
+        .select('*')
+        .order('week_number', { ascending: true });
+      if (!alive) return;
+      const list = (data as DbSprint[]) || [];
+      setAllSprints(list);
+      // If parent never passed a sprint, fall back to current → latest
+      if (!selectedSprintId) {
+        const cur = list.find((s) => s.is_current) ?? list[list.length - 1] ?? null;
+        if (cur) setSelectedSprintId(cur.id);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep our selection in sync with the parent's "current sprint" — but only
+  // until the user explicitly picks something else (parent prop changes).
+  useEffect(() => {
+    if (sprint?.id && !selectedSprintId) setSelectedSprintId(sprint.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sprint?.id]);
+
+  const selectedSprint = useMemo(
+    () => allSprints.find((s) => s.id === selectedSprintId) ?? sprint ?? null,
+    [allSprints, selectedSprintId, sprint],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* localStorage may be blocked — ignore */
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (!selectedSprint) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('president_checklist')
+        .select('*')
+        .eq('sprint_id', selectedSprint.id);
+      if (!alive) return;
+      if (error) {
+        notifyError('Could not load president checklist', error);
+        setItems([]);
+      } else {
+        setItems((data as DbPresidentChecklist[]) || []);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selectedSprint?.id]);
+
+  async function toggle(itemCode: string) {
+    if (!selectedSprint) return;
+    const existing = items.find((i) => i.item_code === itemCode);
+    const nextDone = !(existing?.done ?? false);
+    // Optimistic update
+    const optimistic: DbPresidentChecklist = {
+      sprint_id: selectedSprint.id,
+      item_code: itemCode,
+      done: nextDone,
+      done_at: nextDone ? new Date().toISOString() : null,
+      done_by: nextDone ? currentUserId : null,
+    };
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.item_code === itemCode);
+      if (idx === -1) return [...prev, optimistic];
+      const copy = [...prev];
+      copy[idx] = optimistic;
+      return copy;
+    });
+    const { error } = await supabase.from('president_checklist').upsert(
+      {
+        sprint_id: selectedSprint.id,
+        item_code: itemCode,
+        done: nextDone,
+        done_at: nextDone ? new Date().toISOString() : null,
+        // RLS requires done_by = auth.uid() — always stamp current user
+        done_by: currentUserId,
+      },
+      { onConflict: 'sprint_id,item_code' },
+    );
+    if (error) {
+      notifyError('Could not save checklist', error);
+      // Roll back on error
+      setItems((prev) =>
+        existing
+          ? prev.map((i) => (i.item_code === itemCode ? existing : i))
+          : prev.filter((i) => i.item_code !== itemCode),
+      );
+    }
+  }
+
+  const total = PRESIDENT_RESPONSIBILITIES.length;
+  const doneCount = PRESIDENT_RESPONSIBILITIES.filter((r) =>
+    items.find((i) => i.item_code === r.code && i.done),
+  ).length;
+  // Sort sprints newest first so the dropdown's most-recent options surface
+  const sprintsForPicker = useMemo(
+    () => [...allSprints].sort((a, b) => b.week_number - a.week_number),
+    [allSprints],
+  );
+
+  return (
+    <Card className="border-primary/40 bg-bubble/30">
+      <CardHeader className="flex items-center justify-between gap-3 flex-wrap">
+        <CardTitle className="flex items-center gap-2">
+          <Briefcase size={18} className="text-primary-deep" /> President checklist
+        </CardTitle>
+        <div className="flex items-center gap-3 flex-wrap">
+          {sprintsForPicker.length > 0 ? (
+            <div className="relative">
+              <select
+                value={selectedSprintId ?? ''}
+                onChange={(e) => setSelectedSprintId(e.target.value || null)}
+                className="appearance-none h-8 rounded-lg border border-border bg-white text-ink font-medium pl-3 pr-8 text-xs hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer transition-colors"
+                aria-label="Choose sprint"
+              >
+                {sprintsForPicker.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    W{s.week_number} · {s.name}
+                    {s.is_current ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={12}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+              />
+            </div>
+          ) : (
+            <span className="text-xs text-muted">No sprint</span>
+          )}
+          <span className="text-xs text-muted">
+            <strong className="text-ink">{doneCount}</strong> / {total} done
+          </span>
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="text-xs text-muted hover:text-ink inline-flex items-center gap-1"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Expand checklist' : 'Collapse checklist'}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            {collapsed ? 'Expand' : 'Collapse'}
+          </button>
+        </div>
+      </CardHeader>
+      {!collapsed && (
+        <CardBody>
+          {!selectedSprint ? (
+            <p className="text-sm text-muted">
+              No active sprint — start one in <a className="text-primary-dark hover:underline" href="#/sprints">Sprints</a> to track checklist progress.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {PRESIDENT_RESPONSIBILITIES.map((r, i) => {
+                const item = items.find((x) => x.item_code === r.code);
+                const isDone = !!item?.done;
+                return (
+                  <li key={r.code}>
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => toggle(r.code)}
+                      className={
+                        'w-full flex items-start gap-2 text-left rounded-md px-2 py-1.5 transition-colors hover:bg-white/60 disabled:opacity-60 disabled:cursor-wait'
+                      }
+                    >
+                      <span
+                        className={
+                          'w-5 h-5 rounded-md grid place-items-center flex-shrink-0 mt-0.5 border transition-colors ' +
+                          (isDone
+                            ? 'bg-primary border-primary text-white'
+                            : 'bg-white border-border text-muted')
+                        }
+                        aria-hidden
+                      >
+                        {isDone ? <Check size={12} /> : <span className="text-[10px] font-semibold">{i + 1}</span>}
+                      </span>
+                      <span className={isDone ? 'line-through text-muted' : ''}>{r.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardBody>
+      )}
+    </Card>
+  );
+}
