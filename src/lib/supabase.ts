@@ -35,6 +35,7 @@ export type DbProfile = {
   telegram: string | null;
   website: string | null;
   is_president: boolean;
+  is_placeholder: boolean;
   filled_by: string | null;
   created_at: string;
   updated_at: string;
