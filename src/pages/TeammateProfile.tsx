@@ -141,6 +141,7 @@ export function TeammateProfile() {
               <ShieldCheck size={11} /> Proxy mode
             </Badge>
             {target.is_placeholder && <Badge tone="warn">placeholder</Badge>}
+            {target.is_dropped_out && <Badge tone="bad">dropped out</Badge>}
             {fillerName && <ProxyBadge fillerName={fillerName} />}
             <span>
               {target.is_placeholder
@@ -149,6 +150,34 @@ export function TeammateProfile() {
             </span>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            const next = !target.is_dropped_out;
+            if (
+              next &&
+              !confirm(`Mark "${target.full_name || 'this teammate'}" as dropped out of the cohort?`)
+            ) {
+              return;
+            }
+            const { data, error } = await supabase
+              .from('profiles')
+              .update({
+                is_dropped_out: next,
+                dropped_out_at: next ? new Date().toISOString() : null,
+                filled_by: user.id,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('user_id', target.user_id)
+              .select()
+              .maybeSingle();
+            if (error) return notifyError('Could not update teammate status', error);
+            if (data) setTarget(data as DbProfile);
+          }}
+        >
+          {target.is_dropped_out ? 'Mark active' : 'Drop out…'}
+        </Button>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-ink/90">

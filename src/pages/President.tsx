@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { Check, Circle, Link2, PencilLine, ShieldCheck, UserPlus } from 'lucide-react';
+import { Check, Circle, Link2, PencilLine, ShieldCheck, UserMinus, UserPlus } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -206,6 +206,33 @@ export function President() {
     setAddDraft({ full_name: '', email: '' });
   }
 
+  async function toggleDroppedOut(p: DbProfile) {
+    if (!user) return;
+    const next = !p.is_dropped_out;
+    if (
+      next &&
+      !confirm(`Mark "${p.full_name || 'this teammate'}" as dropped out of the cohort?`)
+    ) {
+      return;
+    }
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        is_dropped_out: next,
+        dropped_out_at: next ? new Date().toISOString() : null,
+        filled_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', p.user_id)
+      .select()
+      .maybeSingle();
+    if (error) return notifyError('Could not update teammate status', error);
+    if (data) {
+      const updated = data as DbProfile;
+      setProfiles((prev) => prev.map((x) => (x.user_id === updated.user_id ? updated : x)));
+    }
+  }
+
   async function performMerge() {
     if (!mergeFor || !mergeTarget) return;
     setMerging(true);
@@ -317,6 +344,11 @@ export function President() {
                             placeholder
                           </Badge>
                         )}
+                        {p.is_dropped_out && (
+                          <Badge tone="bad" title="No longer in the cohort">
+                            dropped out
+                          </Badge>
+                        )}
                       </div>
                     </td>
                     <td className="px-2 py-2">
@@ -352,19 +384,36 @@ export function President() {
                       />
                     </td>
                     <td className="px-2 py-2">
-                      {p.is_placeholder && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMergeFor(p);
-                            setMergeTarget('');
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
-                          title="Manually link to an existing real account"
-                        >
-                          <Link2 size={12} /> Merge…
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {p.is_placeholder && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMergeFor(p);
+                              setMergeTarget('');
+                            }}
+                            className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
+                            title="Manually link to an existing real account"
+                          >
+                            <Link2 size={12} /> Merge…
+                          </button>
+                        )}
+                        {p.user_id !== user.id && (
+                          <button
+                            type="button"
+                            onClick={() => toggleDroppedOut(p)}
+                            className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
+                            title={
+                              p.is_dropped_out
+                                ? 'Mark as still active in the cohort'
+                                : 'Mark as dropped out of the cohort'
+                            }
+                          >
+                            <UserMinus size={12} />{' '}
+                            {p.is_dropped_out ? 'Mark active' : 'Drop out…'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
