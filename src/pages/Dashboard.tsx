@@ -25,9 +25,9 @@ import {
   latestSnapshotDate,
   rowsForDate,
 } from '@/lib/standings';
-import { LayoutDashboard, Megaphone, CalendarClock, Briefcase, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Megaphone, CalendarClock, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { PRESIDENT_RESPONSIBILITIES } from '@/components/shared/PresidentRole';
+import { PresidentChecklist } from '@/components/shared/PresidentChecklist';
 import { ReflectionIcon, ReflectionLabel } from '@/components/shared/Reflection';
 import { isOwnerFilled } from '@/lib/presidentMode';
 
@@ -411,29 +411,8 @@ export function Dashboard() {
         );
       })()}
 
-      {iAmPresident && (
-        <Card className="border-primary/40 bg-bubble/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Briefcase size={18} className="text-primary-deep" /> President checklist — your accountability
-            </CardTitle>
-          </CardHeader>
-          <CardBody>
-            <p className="text-xs text-muted mb-3">
-              You're the President of this Working Group. Per FI guide, your responsibilities for every session:
-            </p>
-            <ul className="space-y-2 text-sm">
-              {PRESIDENT_RESPONSIBILITIES.map((r, i) => (
-                <li key={r.code} className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary text-white grid place-items-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                    {i + 1}
-                  </span>
-                  <span>{r.label}</span>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
+      {iAmPresident && user && (
+        <PresidentChecklist sprint={sprint} currentUserId={user.id} />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
