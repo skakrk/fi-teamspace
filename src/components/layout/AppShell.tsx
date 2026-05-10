@@ -12,11 +12,13 @@ import {
   Trophy,
   BookOpenCheck,
   Shield,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useTeam';
 import { Logo } from '@/components/shared/Logo';
 import { isAdmin } from '@/lib/admin';
 
@@ -36,11 +38,17 @@ const NAV: NavItem[] = [
 
 export function AppShell() {
   const { user, signOut } = useAuth();
+  const { profile } = useProfile(user?.id);
+  const iAmPresident = !!profile?.is_president;
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navItems: NavItem[] = isAdmin(user)
-    ? [...NAV, { to: '/admin', label: 'Admin', icon: Shield }]
-    : NAV;
+  const navItems: NavItem[] = [
+    ...NAV,
+    ...(iAmPresident
+      ? [{ to: '/president', label: 'President Inbox', icon: ShieldCheck } as NavItem]
+      : []),
+    ...(isAdmin(user) ? [{ to: '/admin', label: 'Admin', icon: Shield } as NavItem] : []),
+  ];
 
   return (
     <div className="min-h-screen flex bg-bg">
