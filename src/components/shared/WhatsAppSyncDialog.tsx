@@ -6,17 +6,21 @@ import { Textarea } from '@/components/ui/Input';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { notifyError } from '@/lib/notify';
 
-export function defaultWaSyncTemplate(sprintName: string | null | undefined) {
+export function defaultWaSyncTemplate(
+  sprintName: string | null | undefined,
+  presidentName: string | null | undefined,
+) {
   const title = sprintName ? sprintName : 'this week';
+  const signature = (presidentName && presidentName.trim()) || 'President';
   return [
-    `Hey team — quick sync before our next Working Group session (${title}):`,
+    `Hi team! Quick sync about ${title} before I share our sprint results with the Local Director:`,
     '',
-    '🎤 Is your Feedback Pitch ready and marked Ready in Best Teamspace?',
-    '⏱️ Any concerns about pitch timing this week?',
-    '🚧 Anything blocking you that we should discuss / escalate?',
+    '🎤 Was your Feedback Pitch ready this session, and marked Ready in Best Teamspace?',
+    '⏱️ Any feedback on pitch timing this week?',
+    '🚧 Wins, concerns or blockers I should flag to the Director?',
     '',
-    'Drop a quick reply so I can prep — thanks!',
-    '— President',
+    'Drop a quick reply so I can roll it into the report. Thanks!',
+    signature,
   ].join('\n');
 }
 
@@ -25,20 +29,22 @@ export function WhatsAppSyncDialog({
   onOpenChange,
   whatsappUrl,
   sprintName,
+  presidentName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   whatsappUrl: string;
   sprintName: string | null | undefined;
+  presidentName: string | null | undefined;
 }) {
-  const [text, setText] = useState(() => defaultWaSyncTemplate(sprintName));
+  const [text, setText] = useState(() => defaultWaSyncTemplate(sprintName, presidentName));
   const [copied, setCopied] = useState(false);
 
-  // Refresh template when the dialog opens for a different sprint, but
-  // don't blow away mid-edit text on every prop change.
+  // Refresh template when the dialog opens for a different sprint or
+  // president, but don't blow away mid-edit text on every prop change.
   useEffect(() => {
-    if (open) setText(defaultWaSyncTemplate(sprintName));
-  }, [open, sprintName]);
+    if (open) setText(defaultWaSyncTemplate(sprintName, presidentName));
+  }, [open, sprintName, presidentName]);
 
   async function handleCopy() {
     try {
