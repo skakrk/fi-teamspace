@@ -50,7 +50,14 @@ export function ProfileCard({
             <div className="text-sm text-muted mt-0.5">{profile.project_name}</div>
           )}
         </div>
-        {profile.is_president && <Badge tone="primary">President</Badge>}
+        <div className="flex items-center gap-1.5 flex-wrap justify-center">
+          {profile.is_president && <Badge tone="primary">President</Badge>}
+          {profile.is_placeholder && (
+            <Badge tone="warn" title="Placeholder card — auto-claimed when this email signs up">
+              placeholder
+            </Badge>
+          )}
+        </div>
         {effectivePhone && (
           <div className="text-sm text-muted flex items-center gap-1">
             <Phone size={13} /> {effectivePhone}

@@ -14,9 +14,9 @@ import { notifyError } from '@/lib/notify';
 import { ShieldCheck } from 'lucide-react';
 
 // President-only proxy form for filling in a teammate's project / collaboration
-// fields. Personal contact fields (full_name, phone, linkedin, telegram, email,
-// website, twitter) are intentionally NOT editable here — those are owned by
-// the teammate.
+// fields. For real (registered) teammates, personal contact fields stay
+// owner-only. Placeholder profiles allow editing name + email too — they have
+// no real owner yet, and the email is what the auto-claim trigger matches on.
 const PROXIED_FIELDS = [
   'about_me',
   'project_name',
@@ -29,6 +29,9 @@ const PROXIED_FIELDS = [
   'can_help_with',
   'need_help_with',
 ] as const satisfies ReadonlyArray<keyof DbProfile>;
+const PLACEHOLDER_EXTRA_FIELDS = ['full_name', 'email'] as const satisfies ReadonlyArray<
+  keyof DbProfile
+>;
 
 export function TeammateProfile() {
   const { userId } = useParams<{ userId: string }>();
@@ -55,6 +58,9 @@ export function TeammateProfile() {
       if (t) {
         const d: Partial<DbProfile> = {};
         for (const f of PROXIED_FIELDS) d[f] = t[f] as never;
+        if (t.is_placeholder) {
+          for (const f of PLACEHOLDER_EXTRA_FIELDS) d[f] = t[f] as never;
+        }
         setDraft(d);
       }
     })();
@@ -86,7 +92,7 @@ export function TeammateProfile() {
     );
   }
 
-  function set<K extends (typeof PROXIED_FIELDS)[number]>(key: K, val: DbProfile[K]) {
+  function set<K extends keyof DbProfile>(key: K, val: DbProfile[K]) {
     setDraft((prev) => ({ ...prev, [key]: val }));
   }
 
@@ -98,6 +104,12 @@ export function TeammateProfile() {
       updated_at: new Date().toISOString(),
     };
     for (const f of PROXIED_FIELDS) payload[f] = draft[f] ?? null;
+    if (target.is_placeholder) {
+      // Placeholder: also accept name/email — full_name must stay non-null per
+      // schema, fall back to existing value or empty string.
+      payload.full_name = (draft.full_name as string | undefined) ?? target.full_name ?? '';
+      payload.email = (draft.email as string | null | undefined) ?? target.email ?? null;
+    }
     const { error } = await supabase
       .from('profiles')
       .update(payload)
@@ -128,17 +140,59 @@ export function TeammateProfile() {
             <Badge tone="warn">
               <ShieldCheck size={11} /> Proxy mode
             </Badge>
+            {target.is_placeholder && <Badge tone="warn">placeholder</Badge>}
             {fillerName && <ProxyBadge fillerName={fillerName} />}
-            <span>Editing project / bio fields on their behalf.</span>
+            <span>
+              {target.is_placeholder
+                ? 'Editing on their behalf until they sign up.'
+                : 'Editing project / bio fields on their behalf.'}
+            </span>
           </div>
         </div>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-ink/90">
-        Personal fields (name, phone, LinkedIn, email, telegram, twitter, website) are{' '}
-        <strong>not editable here</strong> — those belong to the teammate. As soon as they edit
-        anything in their own profile, this slot becomes read-only for the President.
+        {target.is_placeholder ? (
+          <>
+            <strong>Placeholder card.</strong> When someone signs up with the email below, this
+            card auto-claims into their account and all the data you've filled here transfers
+            over.
+          </>
+        ) : (
+          <>
+            Personal fields (name, phone, LinkedIn, email, telegram, twitter, website) are{' '}
+            <strong>not editable here</strong> — those belong to the teammate. As soon as they
+            edit anything in their own profile, this slot becomes read-only for the President.
+          </>
+        )}
       </div>
+
+      {target.is_placeholder && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Identity</CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div>
+              <Label>Full name</Label>
+              <Input
+                value={(draft.full_name as string | undefined) ?? ''}
+                onChange={(e) => set('full_name', e.target.value)}
+                placeholder="Jane Founder"
+              />
+            </div>
+            <div>
+              <Label>Email (auto-claim key)</Label>
+              <Input
+                type="email"
+                value={(draft.email as string | null | undefined) ?? ''}
+                onChange={(e) => set('email', e.target.value)}
+                placeholder="jane@example.com"
+              />
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
