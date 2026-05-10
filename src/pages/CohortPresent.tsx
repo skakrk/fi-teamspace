@@ -8,6 +8,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeam } from '@/hooks/useTeam';
 import { ReflectionLabel } from '@/components/shared/Reflection';
+import { Logo } from '@/components/shared/Logo';
 import {
   supabase,
   type DbCohortRating,
@@ -380,6 +381,17 @@ export function CohortPresent() {
 
   return (
     <div className="min-h-screen bg-white text-ink p-6 sm:p-8 lg:p-14 relative">
+      <a
+        href={`${import.meta.env.BASE_URL}landing.html`}
+        className="absolute top-4 left-4 sm:top-6 sm:left-6 inline-flex items-center gap-2 z-10 group"
+        aria-label="Go to Best Teamspace landing"
+        title="Open landing page"
+      >
+        <Logo size="md" className="group-hover:opacity-90 transition-opacity" />
+        <span className="text-sm font-semibold text-ink leading-tight group-hover:text-primary-deep transition-colors">
+          Best Teamspace
+        </span>
+      </a>
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10">
         <button
           onClick={copyShareLink}
