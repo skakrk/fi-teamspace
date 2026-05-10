@@ -99,7 +99,7 @@ export function App() {
         <Route path="/progress" element={<Guarded label="Course progress"><CourseProgress /></Guarded>} />
         <Route path="/resources" element={<Guarded label="Resources"><Resources /></Guarded>} />
         <Route path="/admin" element={<Guarded label="Admin"><Admin /></Guarded>} />
-        <Route path="/president" element={<Guarded label="Manage team"><President /></Guarded>} />
+        <Route path="/president" element={<Guarded label="Teammates"><President /></Guarded>} />
         <Route
           path="/president/profile/:userId"
           element={<Guarded label="Teammate profile (proxy)"><TeammateProfile /></Guarded>}
